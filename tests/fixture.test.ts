@@ -32,6 +32,10 @@ describe('resolveCollectors', () => {
       screenshot: { quality: 80 },
       axe: {},
       forms: {},
+      'web-vitals': {},
+      console: {},
+      network: {},
+      metadata: {},
     });
   });
 
@@ -56,7 +60,7 @@ describe('resolveCollectors', () => {
       },
     );
 
-    expect([...result.keys()]).toEqual(['screenshot']);
+    expect([...result.keys()]).toEqual(['screenshot', 'web-vitals', 'console', 'network', 'metadata']);
   });
 });
 
