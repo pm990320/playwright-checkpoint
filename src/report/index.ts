@@ -1,6 +1,207 @@
-// Placeholder — reporter plugins will be added in follow-up issues.
-// The ReportGenerator interface is defined in ../types.ts.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import type {
+  CheckpointConfig,
+  CheckpointManifest,
+  ReportGenerationResults,
+  ReportGenerator,
+  ReporterConfig,
+  RunRecord,
+} from '../types';
+
+const builtinReporters = new Map<string, ReportGenerator>();
+
+async function walkFiles(directory: string): Promise<string[]> {
+  const dirents = await fs.readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const dirent of dirents) {
+    const absolutePath = path.join(directory, dirent.name);
+    if (dirent.isDirectory()) {
+      files.push(...(await walkFiles(absolutePath)));
+      continue;
+    }
+    if (dirent.isFile()) {
+      files.push(absolutePath);
+    }
+  }
+
+  return files;
+}
+
+function isCheckpointManifestFile(filePath: string): boolean {
+  const fileName = path.basename(filePath);
+  return fileName === 'checkpoint-manifest.json' || (fileName.startsWith('checkpoint-manifest-') && fileName.endsWith('.json'));
+}
+
+function isCheckpointManifest(value: unknown): value is CheckpointManifest {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const manifest = value as Partial<CheckpointManifest>;
+  return (
+    typeof manifest.project === 'string' &&
+    typeof manifest.testId === 'string' &&
+    typeof manifest.title === 'string' &&
+    typeof manifest.startedAt === 'string' &&
+    Array.isArray(manifest.tags) &&
+    Array.isArray(manifest.checkpoints)
+  );
+}
+
+function toRunRecord(manifest: CheckpointManifest, sourceManifestPath: string): RunRecord {
+  return {
+    key: `${manifest.testId}|${manifest.project}|${manifest.startedAt}`,
+    sourceManifestPath,
+    environment: manifest.environment || 'unknown',
+    project: manifest.project,
+    testId: manifest.testId,
+    title: manifest.title,
+    tags: manifest.tags,
+    startedAt: manifest.startedAt,
+    checkpoints: manifest.checkpoints,
+  };
+}
+
+function toManifest(run: RunRecord): CheckpointManifest {
+  return {
+    environment: run.environment,
+    project: run.project,
+    testId: run.testId,
+    title: run.title,
+    tags: run.tags,
+    startedAt: run.startedAt,
+    checkpoints: run.checkpoints,
+  };
+}
+
+function normalizeReporterConfig(config: ReporterConfig | undefined): Record<string, unknown> | null {
+  if (config == null || config === false) {
+    return null;
+  }
+
+  if (config === true) {
+    return {};
+  }
+
+  return { ...config };
+}
+
+export function registerBuiltinReporter(reporter: ReportGenerator): void {
+  builtinReporters.set(reporter.name, reporter);
+}
+
+export function dedupeRuns(runs: RunRecord[]): RunRecord[] {
+  const map = new Map<string, RunRecord>();
+
+  for (const run of runs) {
+    const existing = map.get(run.key);
+    if (!existing) {
+      map.set(run.key, run);
+      continue;
+    }
+
+    const existingTime = new Date(existing.startedAt).getTime();
+    const currentTime = new Date(run.startedAt).getTime();
+    if (currentTime >= existingTime) {
+      map.set(run.key, run);
+    }
+  }
+
+  return [...map.values()];
+}
+
+export async function loadRuns(testResultsDir: string): Promise<RunRecord[]> {
+  let manifestFiles: string[];
+  try {
+    manifestFiles = (await walkFiles(testResultsDir)).filter(isCheckpointManifestFile);
+  } catch {
+    return [];
+  }
+
+  const runs: RunRecord[] = [];
+  for (const manifestPath of manifestFiles) {
+    let rawManifest: unknown;
+    try {
+      rawManifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+    } catch {
+      continue;
+    }
+
+    if (!isCheckpointManifest(rawManifest)) {
+      continue;
+    }
+
+    runs.push(toRunRecord(rawManifest, manifestPath));
+  }
+
+  return dedupeRuns(runs);
+}
+
+export function groupByStory(runs: RunRecord[]): Map<string, RunRecord[]> {
+  const stories = new Map<string, RunRecord[]>();
+
+  for (const run of runs) {
+    const existing = stories.get(run.title) ?? [];
+    existing.push(run);
+    stories.set(run.title, existing);
+  }
+
+  return stories;
+}
+
+export function orderedCheckpointNames(runs: RunRecord[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  for (const run of runs) {
+    for (const checkpoint of run.checkpoints) {
+      if (seen.has(checkpoint.name)) {
+        continue;
+      }
+
+      seen.add(checkpoint.name);
+      names.push(checkpoint.name);
+    }
+  }
+
+  return names;
+}
+
+export async function runReporters(
+  config: CheckpointConfig,
+  testResultsDir: string,
+  outputDir: string,
+): Promise<ReportGenerationResults> {
+  const runs = await loadRuns(testResultsDir);
+  const manifests = runs.map(toManifest);
+  const results: ReportGenerationResults = {};
+
+  for (const [name, value] of Object.entries(config.reporters ?? {})) {
+    const reporterConfig = normalizeReporterConfig(value);
+    if (!reporterConfig) {
+      continue;
+    }
+
+    const reporter = builtinReporters.get(name);
+    if (!reporter) {
+      throw new Error(`Reporter "${name}" is enabled but no implementation is registered.`);
+    }
+
+    if (reporter.validateConfig && !reporter.validateConfig(reporterConfig)) {
+      throw new Error(`Reporter "${name}" received invalid configuration.`);
+    }
+
+    results[name] = await reporter.generate({
+      runs,
+      outputDir,
+      config: reporterConfig,
+      manifests,
+    });
+  }
+
+  return results;
+}
 
 export type { ReportGenerator } from '../types';
-
-export {};

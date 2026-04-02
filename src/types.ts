@@ -146,6 +146,90 @@ export type CheckpointCollector = {
 };
 
 // ---------------------------------------------------------------------------
+// Built-in collector data shapes
+// ---------------------------------------------------------------------------
+
+export type BoundingBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type ScreenshotCollectorData = {
+  fullPage: boolean;
+  highlightBounds: BoundingBox | null;
+};
+
+export type HtmlCollectorData = {
+  contentLength: number;
+};
+
+export type AxeCollectorData = {
+  skipped: boolean;
+  reason: string | null;
+  violations: number;
+  results: unknown | null;
+};
+
+export type WebVitalRating = 'good' | 'needs-improvement' | 'poor' | 'unknown';
+
+export type WebVitalMetric = {
+  value: number | null;
+  rating: WebVitalRating;
+};
+
+export type WebVitalsSnapshot = {
+  url: string;
+  capturedAt: string;
+  cls: WebVitalMetric;
+  fcpMs: WebVitalMetric;
+  lcpMs: WebVitalMetric;
+  inpMs: WebVitalMetric;
+  ttfbMs: WebVitalMetric;
+  domContentLoadedMs: number | null;
+  loadEventMs: number | null;
+};
+
+export type ConsoleErrorRecord = {
+  type: string;
+  text: string;
+  location:
+    | {
+        url?: string;
+        lineNumber?: number;
+        columnNumber?: number;
+      }
+    | null;
+  timestamp: string;
+};
+
+export type FailedRequestRecord = {
+  kind: 'requestfailed' | 'http-error';
+  url: string;
+  method: string;
+  status: number | null;
+  statusText: string | null;
+  failureText: string | null;
+  timestamp: string;
+};
+
+export type PageMetadata = {
+  url: string;
+  title: string;
+  description: string | null;
+  openGraph: {
+    title: string | null;
+    description: string | null;
+    image: string | null;
+  };
+  canonicalUrl: string | null;
+  lang: string | null;
+  viewport: string | null;
+  structuredData: unknown[];
+};
+
+// ---------------------------------------------------------------------------
 // Reporter types
 // ---------------------------------------------------------------------------
 
@@ -191,6 +275,8 @@ export type ReportGenerator = {
   /** Generate the report from loaded runs and manifests. */
   generate(context: ReportGeneratorContext): Promise<ReportGeneratorResult>;
 };
+
+export type ReportGenerationResults = Record<string, ReportGeneratorResult>;
 
 // ---------------------------------------------------------------------------
 // Global config

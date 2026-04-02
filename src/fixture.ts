@@ -11,6 +11,9 @@ import type {
   TestInfo,
   TestType,
 } from '@playwright/test';
+import { builtinCollectors as defaultBuiltinCollectors } from './collectors/builtin-collectors';
+import { getBuiltinCollectors, registerBuiltinCollector, registerBuiltinCollectors } from './collectors/registry';
+import { settlePage } from './page-utils';
 import type {
   CheckpointCollector,
   CheckpointConfig,
@@ -64,7 +67,8 @@ const require = (() => {
     return createRequire(path.join(process.cwd(), 'playwright-checkpoint-runtime.cjs'));
   }
 })();
-const builtinCollectors = new Map<string, CheckpointCollector>();
+
+registerBuiltinCollectors(defaultBuiltinCollectors);
 
 function loadPlaywright(): PlaywrightRuntime {
   return require('@playwright/test') as PlaywrightRuntime;
@@ -153,7 +157,7 @@ function mergeTestConfig(
 }
 
 function collectorRegistryFor(globalConfig: CheckpointConfig = {}): Map<string, CheckpointCollector> {
-  const registry = new Map<string, CheckpointCollector>(builtinCollectors);
+  const registry = getBuiltinCollectors();
 
   for (const collector of globalConfig.custom ?? []) {
     registry.set(collector.name, collector);
@@ -279,9 +283,7 @@ async function runCollectorTeardown(collectors: Iterable<CheckpointCollector>, p
   }
 }
 
-export function registerBuiltinCollector(collector: CheckpointCollector): void {
-  builtinCollectors.set(collector.name, collector);
-}
+export { registerBuiltinCollector };
 
 export function sanitizeSegment(value: string): string {
   return (
@@ -293,10 +295,7 @@ export function sanitizeSegment(value: string): string {
   );
 }
 
-export async function settlePage(page: Page): Promise<void> {
-  await page.waitForLoadState('domcontentloaded').catch(() => undefined);
-  await page.waitForLoadState('load', { timeout: 3_000 }).catch(() => undefined);
-}
+export { settlePage };
 
 export function titleParts(testInfo: TestInfo): string[] {
   const maybeTitlePath = (testInfo as { titlePath?: unknown }).titlePath;
