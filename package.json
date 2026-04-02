@@ -1,0 +1,64 @@
+{
+  "name": "playwright-checkpoint",
+  "version": "0.1.0",
+  "description": "Structured page snapshots for Playwright — screenshots, accessibility, web vitals, and auto-generated documentation from your e2e tests",
+  "keywords": [
+    "playwright",
+    "testing",
+    "checkpoint",
+    "e2e",
+    "accessibility",
+    "web-vitals",
+    "documentation"
+  ],
+  "license": "MIT",
+  "author": "pm990320",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gecckio/playwright-checkpoint.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gecckio/playwright-checkpoint/issues"
+  },
+  "homepage": "https://github.com/gecckio/playwright-checkpoint",
+  "private": false,
+  "type": "module",
+  "packageManager": "bun@1.2.15",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./cli": {
+      "types": "./dist/cli/index.d.ts",
+      "import": "./dist/cli/index.js",
+      "require": "./dist/cli/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup src/index.ts src/cli/index.ts --format esm,cjs --dts --clean --out-dir dist",
+    "check": "tsc --noEmit",
+    "prepack": "bun run build",
+    "pack:check": "npm pack --dry-run"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.40"
+  },
+  "optionalDependencies": {
+    "@axe-core/playwright": "^4.10.2"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
+  }
+}
