@@ -13,10 +13,7 @@
   ],
   "license": "MIT",
   "author": "pm990320",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/gecckio/playwright-checkpoint.git"
-  },
+  "repository": "gecckio/playwright-checkpoint",
   "bugs": {
     "url": "https://github.com/gecckio/playwright-checkpoint/issues"
   },
