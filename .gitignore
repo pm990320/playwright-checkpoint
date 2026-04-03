@@ -3,3 +3,5 @@ dist
 coverage
 test-results
 .env
+
+.beads/
