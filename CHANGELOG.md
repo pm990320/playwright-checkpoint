@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/pm990320/playwright-checkpoint/compare/v0.2.1...v0.2.2) (2026-04-03)
+
+
+### Bug Fixes
+
+* use tag_name for checkout to fix npm publish ([608031d](https://github.com/pm990320/playwright-checkpoint/commit/608031d9a59835906ffceec69a71bb19d4e62d77))
+* use tag_name output for checkout instead of github.ref ([92c0efe](https://github.com/pm990320/playwright-checkpoint/commit/92c0efeb32581d54573ee1f069f17ad9899e87f8))
+
 ## [0.2.1](https://github.com/pm990320/playwright-checkpoint/compare/v0.2.0...v0.2.1) (2026-04-03)
 
 
