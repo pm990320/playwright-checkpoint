@@ -24,6 +24,8 @@ export type CheckpointRecord = {
   url: string;
   title: string;
   timestamp: string;
+  description?: string;
+  step?: number;
   collectors: Record<string, CollectorResult>;
 };
 

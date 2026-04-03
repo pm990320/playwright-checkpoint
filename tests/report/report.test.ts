@@ -313,6 +313,7 @@ describe('report utilities', () => {
       files: [htmlPath],
       summary: 'Generated HTML report for 1 story (1 run).',
     });
+    expect(results).not.toHaveProperty('markdown');
     expect(html).toContain('<!doctype html>');
     expect(html).toContain('Playwright Checkpoint Report');
     expect(html).toContain('Checkout story');
@@ -322,6 +323,116 @@ describe('report utilities', () => {
     expect(html).toContain('Expand all');
     expect(html).toContain('Console');
     expect(html).toContain('failed-requests.json');
+  });
+
+  it('generates Markdown help articles when enabled', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+    const loginCollectors = await writeCollectorArtifacts(testResultsDir, 'login-page');
+    const signInCollectors = await writeCollectorArtifacts(testResultsDir, 'sign-in');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-docs',
+      title: 'Sign in to your account @user-journey',
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Navigate to the login page',
+          slug: 'navigate-to-the-login-page',
+          url: 'https://example.com/login',
+          title: 'Login page',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          description: 'Navigate to the login page. You\'ll see the login form with email and password fields.',
+          step: 1,
+          collectors: loginCollectors,
+        },
+        {
+          name: 'Enter credentials and sign in',
+          slug: 'enter-credentials-and-sign-in',
+          url: 'https://example.com/login',
+          title: 'Credentials entered',
+          timestamp: '2026-04-03T00:00:02.000Z',
+          step: 2,
+          collectors: signInCollectors,
+        },
+      ],
+    });
+
+    const results = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            frontmatter: true,
+            header: 'Follow this flow to sign in safely.',
+            footer: 'Need more help? Contact support.',
+          },
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const articlePath = path.join(outputDir, 'sign-in-to-your-account.md');
+    const imagePath = path.join(outputDir, 'screenshots', 'sign-in-to-your-account', '01-navigate-to-the-login-page.png');
+    const article = await fs.readFile(articlePath, 'utf8');
+
+    expect(results.markdown?.summary).toBe('Generated 1 Markdown article.');
+    expect(results.markdown?.files).toEqual(expect.arrayContaining([articlePath, imagePath]));
+    expect(article).toContain('title: "Sign in to your account"');
+    expect(article).toContain('# Sign in to your account');
+    expect(article).toContain('Follow this flow to sign in safely.');
+    expect(article).toContain('## Step 1: Navigate to the login page');
+    expect(article).toContain('![Login page](./screenshots/sign-in-to-your-account/01-navigate-to-the-login-page.png)');
+    expect(article).toContain('**URL:** `/login`');
+    expect(article).toContain('**Breadcrumb:** login');
+    expect(article).toContain("Navigate to the login page. You'll see the login form with email and password fields.");
+    expect(article).toContain('This step captures **Credentials entered** at `/login`.');
+    expect(article).toContain('Need more help? Contact support.');
+  });
+
+  it('supports generating Markdown articles from tag filters', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-tags-');
+    const collectors = await writeCollectorArtifacts(testResultsDir, 'search');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-docs-tags',
+      title: 'Search docs @user-journey',
+      tags: ['@user-journey'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Open search',
+          slug: 'open-search',
+          url: 'https://example.com/search',
+          title: 'Search',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          collectors,
+        },
+      ],
+    });
+
+    const results = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            includeTags: ['@user-journey'],
+          },
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    expect(results.markdown?.summary).toBe('Generated 1 Markdown article.');
+    await expect(fs.readFile(path.join(outputDir, 'search-docs.md'), 'utf8')).resolves.toContain('# Search docs');
   });
 
   it('produces an empty-state HTML report when no manifests are found', async () => {

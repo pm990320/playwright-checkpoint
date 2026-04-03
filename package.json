@@ -24,6 +24,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "playwright-checkpoint": "./dist/cli/bin.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -34,6 +37,11 @@
       "types": "./dist/cli/index.d.ts",
       "import": "./dist/cli/index.js",
       "require": "./dist/cli/index.cjs"
+    },
+    "./teardown": {
+      "types": "./dist/teardown.d.ts",
+      "import": "./dist/teardown.js",
+      "require": "./dist/teardown.cjs"
     }
   },
   "files": [
@@ -43,7 +51,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts src/cli/index.ts --format esm,cjs --dts --clean --out-dir dist --external @playwright/test --external @axe-core/playwright",
+    "build": "tsup --config tsup.config.ts",
     "check": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
