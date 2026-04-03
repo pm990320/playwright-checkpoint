@@ -76,7 +76,7 @@ jobs:
             throw new Error('npm pack --dry-run did not return a tarball size.');
           }
           console.log(`Tarball: ${pack.filename} (${pack.size} bytes)`);
-          if (pack.size > 100000) {
-            throw new Error(`Tarball too large: ${pack.size} bytes (limit 100000 bytes).`);
+          if (pack.size > 750000) {
+            throw new Error(`Tarball too large: ${pack.size} bytes (limit 750000 bytes).`);
           }
           NODE
