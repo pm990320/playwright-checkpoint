@@ -91,6 +91,8 @@
     "@axe-core/playwright": "^4.10.2"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.5.0",
+    "@commitlint/config-conventional": "^20.5.0",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/node": "^25.5.0",

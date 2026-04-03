@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   // Apply the recommended JS rules first
   {
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**'],
+    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'commitlint.config.cjs'],
   },
   js.configs.recommended,
   // Apply TypeScript rules on top
