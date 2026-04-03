@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.1](https://github.com/pm990320/playwright-checkpoint/compare/v0.2.0...v0.2.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* guard publish job with tag check instead of releases_created condition ([911d53f](https://github.com/pm990320/playwright-checkpoint/commit/911d53fd9dd00e2bb8697e48ac0c59c622b33eb2))
+* guard publish job with tag existence check ([22a80ac](https://github.com/pm990320/playwright-checkpoint/commit/22a80ac4c772820784ae0e8498e054b494b32f29))
+
+
+### Miscellaneous
+
+* integrate npm publish into release-please workflow ([d9fde06](https://github.com/pm990320/playwright-checkpoint/commit/d9fde062b9d3a23317e11bee6b4cf1c44fbfa16b))
+* integrate npm publish into release-please workflow ([34446bf](https://github.com/pm990320/playwright-checkpoint/commit/34446bf1221d155c2af74919a72fc5fe70314855))
+
 ## [0.2.0](https://github.com/pm990320/playwright-checkpoint/compare/v0.1.0...v0.2.0) (2026-04-03)
 
 
