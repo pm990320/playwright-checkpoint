@@ -374,6 +374,7 @@ export async function captureCheckpointRecord(args: {
         checkpointDir,
         checkpointName: args.name,
         checkpointSlug: slug,
+        redact: [...(globalConfig.redact ?? [])],
         config: cloneResolvedConfig(collectorConfig),
         options: {
           ...options,
@@ -414,7 +415,7 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
 
   const test = base.extend<CheckpointFixtures>({
     checkpointManifest: [
-      async ({}, use, testInfo) => {
+      async (_fixtures, use, testInfo) => {
         const manifest = createCheckpointManifestRecord(testInfo);
 
         try {
@@ -430,7 +431,7 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
       { auto: true },
     ],
 
-    testCheckpointConfig: async ({}, use) => {
+    testCheckpointConfig: async (_fixtures, use) => {
       let current: TestCheckpointConfig | null = null;
 
       const controller: TestCheckpointConfigController = {
@@ -450,7 +451,7 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
       await use(controller);
     },
 
-    deviceProfile: async ({}, use, testInfo) => {
+    deviceProfile: async (_fixtures, use, testInfo) => {
       await use(createDeviceProfile(testInfo));
     },
 
