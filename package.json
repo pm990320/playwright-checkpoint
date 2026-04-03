@@ -43,7 +43,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts src/cli/index.ts --format esm,cjs --dts --clean --out-dir dist",
+    "build": "tsup src/index.ts src/cli/index.ts --format esm,cjs --dts --clean --out-dir dist --external @playwright/test --external @axe-core/playwright",
     "check": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",

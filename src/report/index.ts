@@ -8,8 +8,12 @@ import type {
   ReporterConfig,
   RunRecord,
 } from '../types';
+import { htmlReporter } from './html-reporter';
 
 const builtinReporters = new Map<string, ReportGenerator>();
+const builtinReporterDefaults: Partial<Record<string, ReporterConfig>> = {
+  html: true,
+};
 
 async function walkFiles(directory: string): Promise<string[]> {
   const dirents = await fs.readdir(directory, { withFileTypes: true });
@@ -177,8 +181,12 @@ export async function runReporters(
   const runs = await loadRuns(testResultsDir);
   const manifests = runs.map(toManifest);
   const results: ReportGenerationResults = {};
+  const reporterConfigMap: Partial<Record<string, ReporterConfig>> = {
+    ...builtinReporterDefaults,
+    ...(config.reporters ?? {}),
+  };
 
-  for (const [name, value] of Object.entries(config.reporters ?? {})) {
+  for (const [name, value] of Object.entries(reporterConfigMap)) {
     const reporterConfig = normalizeReporterConfig(value);
     if (!reporterConfig) {
       continue;
@@ -204,4 +212,7 @@ export async function runReporters(
   return results;
 }
 
+registerBuiltinReporter(htmlReporter);
+
+export { htmlReporter };
 export type { ReportGenerator } from '../types';
