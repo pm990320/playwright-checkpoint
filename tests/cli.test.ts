@@ -13,6 +13,16 @@ describe('CLI', () => {
     });
   });
 
+  it('parses the docs command and supported flags', () => {
+    expect(parseCliArgs(['docs', '--output-dir', './help', '--format=mdx', '--filter', '@user-journey,@docs'])).toEqual({
+      command: 'docs',
+      resultsDir: 'test-results',
+      outputDir: './help',
+      format: 'mdx',
+      filterTags: ['@user-journey', '@docs'],
+    });
+  });
+
   it('runs report generation with defaults and logs a summary', async () => {
     const log = vi.fn();
     const error = vi.fn();
@@ -37,6 +47,39 @@ describe('CLI', () => {
     expect(error).not.toHaveBeenCalled();
   });
 
+  it('runs docs generation with markdown by default', async () => {
+    const log = vi.fn();
+    const runReportersImpl = vi.fn(async () => ({
+      markdown: {
+        files: ['/tmp/docs/story.md'],
+        summary: 'Generated 1 Markdown article.',
+      },
+    }));
+
+    const exitCode = await runCli(['docs', '--filter', '@user-journey'], {
+      cwd: () => '/workspace',
+      log,
+      error: vi.fn(),
+      runReportersImpl,
+    });
+
+    expect(exitCode).toBe(0);
+    expect(runReportersImpl).toHaveBeenCalledWith(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            includeTags: ['@user-journey'],
+          },
+          mdx: false,
+        },
+      },
+      '/workspace/test-results',
+      '/workspace/docs',
+    );
+    expect(log).toHaveBeenCalledWith('[playwright-checkpoint] Generated MARKDOWN docs from /workspace/test-results to /workspace/docs');
+  });
+
   it('disables built-in reporters when a reporter list is provided', async () => {
     const runReportersImpl = vi.fn(async () => ({
       markdown: {
@@ -58,6 +101,7 @@ describe('CLI', () => {
         reporters: {
           html: false,
           markdown: true,
+          mdx: false,
         },
       },
       '/workspace/test-results',

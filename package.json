@@ -42,6 +42,11 @@
       "types": "./dist/teardown.d.ts",
       "import": "./dist/teardown.js",
       "require": "./dist/teardown.cjs"
+    },
+    "./components": {
+      "types": "./dist/components.d.ts",
+      "import": "./dist/components.js",
+      "require": "./dist/components.cjs"
     }
   },
   "files": [

@@ -1,0 +1,14 @@
+{
+  "name": "playwright-checkpoint-basic-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "playwright-checkpoint": "file:../.."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

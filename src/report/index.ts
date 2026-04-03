@@ -10,11 +10,14 @@ import type {
 } from '../types';
 import { htmlReporter } from './html-reporter';
 import { markdownReporter } from './markdown-reporter';
+import { mdxReporter } from './mdx-reporter';
+export { groupByStory, orderedCheckpointNames } from './story-utils';
 
 const builtinReporters = new Map<string, ReportGenerator>();
 const builtinReporterDefaults: Partial<Record<string, ReporterConfig>> = {
   html: true,
   markdown: false,
+  mdx: false,
 };
 
 async function walkFiles(directory: string): Promise<string[]> {
@@ -145,36 +148,6 @@ export async function loadRuns(testResultsDir: string): Promise<RunRecord[]> {
   return dedupeRuns(runs);
 }
 
-export function groupByStory(runs: RunRecord[]): Map<string, RunRecord[]> {
-  const stories = new Map<string, RunRecord[]>();
-
-  for (const run of runs) {
-    const existing = stories.get(run.title) ?? [];
-    existing.push(run);
-    stories.set(run.title, existing);
-  }
-
-  return stories;
-}
-
-export function orderedCheckpointNames(runs: RunRecord[]): string[] {
-  const names: string[] = [];
-  const seen = new Set<string>();
-
-  for (const run of runs) {
-    for (const checkpoint of run.checkpoints) {
-      if (seen.has(checkpoint.name)) {
-        continue;
-      }
-
-      seen.add(checkpoint.name);
-      names.push(checkpoint.name);
-    }
-  }
-
-  return names;
-}
-
 export async function runReporters(
   config: CheckpointConfig,
   testResultsDir: string,
@@ -216,6 +189,8 @@ export async function runReporters(
 
 registerBuiltinReporter(htmlReporter);
 registerBuiltinReporter(markdownReporter);
+registerBuiltinReporter(mdxReporter);
 
-export { htmlReporter, markdownReporter };
+export { annotateScreenshot } from './annotate';
+export { htmlReporter, markdownReporter, mdxReporter };
 export type { ReportGenerator } from '../types';
