@@ -117,7 +117,7 @@ export type CollectorResult = {
  */
 export type CollectorContext = {
   page: Page;
-  testInfo: TestInfo;
+  testInfo?: TestInfo;
   /** Directory path where artifacts should be written. */
   checkpointDir: string;
   checkpointName: string;
@@ -126,6 +126,7 @@ export type CollectorContext = {
   redact: string[];
   config: ResolvedCollectorConfig;
   options: CheckpointOptions;
+  adjustTimeout?: (ms: number) => void;
 };
 
 /**
@@ -140,13 +141,13 @@ export type CheckpointCollector = {
   defaultEnabled: boolean;
 
   /** Runs once per test before the first checkpoint. */
-  setup?(context: { page: Page; testInfo: TestInfo }): Promise<void>;
+  setup?(context: { page: Page; testInfo?: TestInfo }): Promise<void>;
 
   /** Runs at each checkpoint call. */
   collect(context: CollectorContext): Promise<CollectorResult>;
 
   /** Runs once after the test finishes. */
-  teardown?(context: { page: Page; testInfo: TestInfo }): Promise<void>;
+  teardown?(context: { page: Page; testInfo?: TestInfo }): Promise<void>;
 };
 
 // ---------------------------------------------------------------------------

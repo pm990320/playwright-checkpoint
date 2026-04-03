@@ -11,21 +11,22 @@ import type {
   TestInfo,
   TestType,
 } from '@playwright/test';
-import { builtinCollectors as defaultBuiltinCollectors } from './collectors/builtin-collectors';
-import { getBuiltinCollectors, registerBuiltinCollector, registerBuiltinCollectors } from './collectors/registry';
+import {
+  createCheckpointSession,
+  registerBuiltinCollector,
+  resolveCollectors,
+  sanitizeSegment,
+  settlePage,
+  warn,
+} from './core';
 import { createDeviceProfile, type DeviceProfile } from './device-profile';
-import { settlePage } from './page-utils';
 import type {
-  CheckpointCollector,
   CheckpointConfig,
   CheckpointManifest,
   CheckpointOptions,
   CheckpointRecord,
-  CollectorArtifact,
   CollectorConfig,
   CollectorOptions,
-  CollectorResult,
-  ResolvedCollectorConfig,
   TestCheckpointConfig,
 } from './types';
 
@@ -43,13 +44,6 @@ type CheckpointFixtures = {
   deviceProfile: DeviceProfile;
 };
 
-type CollectorInput = boolean | CollectorOptions | CollectorConfig | undefined;
-
-type MutableCollectorState = {
-  enabled: boolean;
-  config: ResolvedCollectorConfig;
-};
-
 const require = (() => {
   try {
     return Function('return require')() as NodeRequire;
@@ -58,51 +52,8 @@ const require = (() => {
   }
 })();
 
-registerBuiltinCollectors(defaultBuiltinCollectors);
-
 function loadPlaywright(): PlaywrightRuntime {
   return require('@playwright/test') as PlaywrightRuntime;
-}
-
-function cloneResolvedConfig(config: ResolvedCollectorConfig): ResolvedCollectorConfig {
-  return { ...config };
-}
-
-function cloneCollectorState(state: MutableCollectorState | undefined): MutableCollectorState {
-  return {
-    enabled: state?.enabled ?? false,
-    config: cloneResolvedConfig(state?.config ?? {}),
-  };
-}
-
-function applyCollectorInput(state: MutableCollectorState | undefined, input: CollectorInput): MutableCollectorState {
-  const next = cloneCollectorState(state);
-
-  if (input === undefined) {
-    return next;
-  }
-
-  if (input === false) {
-    return {
-      enabled: false,
-      config: {},
-    };
-  }
-
-  if (input === true) {
-    return {
-      enabled: true,
-      config: next.config,
-    };
-  }
-
-  return {
-    enabled: true,
-    config: {
-      ...next.config,
-      ...input,
-    },
-  };
 }
 
 function mergeCollectorOverrides(
@@ -134,26 +85,13 @@ function mergeCollectorOverrides(
   return merged;
 }
 
-function mergeTestConfig(
-  current: TestCheckpointConfig | null,
-  update: TestCheckpointConfig,
-): TestCheckpointConfig {
+function mergeTestConfig(current: TestCheckpointConfig | null, update: TestCheckpointConfig): TestCheckpointConfig {
   const collectors = mergeCollectorOverrides(current?.collectors, update.collectors);
 
   return {
     description: update.description ?? current?.description,
     ...(collectors ? { collectors } : {}),
   };
-}
-
-function collectorRegistryFor(globalConfig: CheckpointConfig = {}): Map<string, CheckpointCollector> {
-  const registry = getBuiltinCollectors();
-
-  for (const collector of globalConfig.custom ?? []) {
-    registry.set(collector.name, collector);
-  }
-
-  return registry;
 }
 
 function manifestEnvironment(): string {
@@ -163,112 +101,6 @@ function manifestEnvironment(): string {
 function explicitTestTags(testInfo: TestInfo): string[] {
   return (((testInfo as TestInfo & { tags?: string[] }).tags ?? []) as string[]).map((tag) => tag.toLowerCase());
 }
-
-export function manifestTags(testInfo: TestInfo): string[] {
-  return Array.from(new Set([...explicitTestTags(testInfo), ...collectTags(titleParts(testInfo))]));
-}
-
-export function warn(message: string, error?: unknown): void {
-  if (error instanceof Error) {
-    console.warn(`[playwright-checkpoint] ${message}`, error);
-    return;
-  }
-
-  if (error !== undefined) {
-    console.warn(`[playwright-checkpoint] ${message}`, String(error));
-    return;
-  }
-
-  console.warn(`[playwright-checkpoint] ${message}`);
-}
-
-export function checkpointSlug(name: string, existing: CheckpointRecord[]): string {
-  const base = sanitizeSegment(name);
-  const existingSlugs = new Set(existing.map((record) => record.slug));
-
-  if (!existingSlugs.has(base)) {
-    return base;
-  }
-
-  let index = 2;
-  let candidate = `${base}-${index}`;
-  while (existingSlugs.has(candidate)) {
-    index += 1;
-    candidate = `${base}-${index}`;
-  }
-
-  return candidate;
-}
-
-async function attachArtifacts(
-  testInfo: TestInfo,
-  checkpointSlugValue: string,
-  collectorName: string,
-  artifacts: CollectorArtifact[],
-): Promise<void> {
-  for (const artifact of artifacts) {
-    try {
-      await testInfo.attach(`${checkpointSlugValue}/${collectorName}/${artifact.name}`, {
-        path: artifact.path,
-        contentType: artifact.contentType,
-      });
-    } catch (error) {
-      warn(`Failed to attach artifact "${artifact.name}" from collector "${collectorName}".`, error);
-    }
-  }
-}
-
-export async function collectPageTitle(page: Page): Promise<string> {
-  try {
-    return await page.title();
-  } catch {
-    return '';
-  }
-}
-
-export async function runCollectorSetup(collectors: Iterable<CheckpointCollector>, page: Page, testInfo: TestInfo): Promise<void> {
-  for (const collector of collectors) {
-    if (!collector.setup) {
-      continue;
-    }
-
-    try {
-      await collector.setup({ page, testInfo });
-    } catch (error) {
-      warn(`Collector "${collector.name}" setup failed.`, error);
-    }
-  }
-}
-
-export async function runCollectorTeardown(collectors: Iterable<CheckpointCollector>, page: Page, testInfo: TestInfo): Promise<void> {
-  const collectorList = Array.from(collectors).reverse();
-
-  for (const collector of collectorList) {
-    if (!collector.teardown) {
-      continue;
-    }
-
-    try {
-      await collector.teardown({ page, testInfo });
-    } catch (error) {
-      warn(`Collector "${collector.name}" teardown failed.`, error);
-    }
-  }
-}
-
-export { registerBuiltinCollector };
-
-export function sanitizeSegment(value: string): string {
-  return (
-    value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'checkpoint'
-  );
-}
-
-export { settlePage };
 
 export function titleParts(testInfo: TestInfo): string[] {
   const maybeTitlePath = (testInfo as { titlePath?: unknown }).titlePath;
@@ -287,38 +119,8 @@ export function collectTags(parts: string[]): Set<string> {
   return tags;
 }
 
-export function resolveCollectors(
-  globalConfig: CheckpointConfig = {},
-  testConfig: TestCheckpointConfig | null = null,
-  checkpointOptions: CheckpointOptions = {},
-): Map<string, ResolvedCollectorConfig> {
-  const registry = collectorRegistryFor(globalConfig);
-  const states = new Map<string, MutableCollectorState>();
-
-  for (const collector of registry.values()) {
-    states.set(collector.name, {
-      enabled: collector.defaultEnabled,
-      config: {},
-    });
-  }
-
-  const levels = [globalConfig.collectors, testConfig?.collectors, checkpointOptions.collectors];
-
-  for (const level of levels) {
-    for (const [name, input] of Object.entries(level ?? {})) {
-      states.set(name, applyCollectorInput(states.get(name), input));
-    }
-  }
-
-  const resolved = new Map<string, ResolvedCollectorConfig>();
-
-  for (const [name, state] of states) {
-    if (state.enabled) {
-      resolved.set(name, cloneResolvedConfig(state.config));
-    }
-  }
-
-  return resolved;
+export function manifestTags(testInfo: TestInfo): string[] {
+  return Array.from(new Set([...explicitTestTags(testInfo), ...collectTags(titleParts(testInfo))]));
 }
 
 export function createCheckpointManifestRecord(testInfo: TestInfo): CheckpointManifest {
@@ -340,6 +142,24 @@ export async function writeCheckpointManifest(testInfo: TestInfo, manifest: Chec
   return manifestPath;
 }
 
+function createAdjustTimeout(testInfo: TestInfo): (ms: number) => void {
+  return (ms: number) => {
+    if (ms > 0 && typeof testInfo.setTimeout === 'function') {
+      testInfo.setTimeout(testInfo.timeout + ms);
+    }
+  };
+}
+
+function mergeConfig(
+  globalConfig: CheckpointConfig = {},
+  testConfig: TestCheckpointConfig | null,
+): Partial<Record<string, boolean | CollectorConfig>> | undefined {
+  return mergeCollectorOverrides(
+    globalConfig.collectors,
+    testConfig?.collectors,
+  ) as Partial<Record<string, boolean | CollectorConfig>> | undefined;
+}
+
 export async function captureCheckpointRecord(args: {
   globalConfig?: CheckpointConfig;
   page: Page;
@@ -350,58 +170,22 @@ export async function captureCheckpointRecord(args: {
   options?: CheckpointOptions;
 }): Promise<CheckpointRecord> {
   const globalConfig = args.globalConfig ?? {};
-  const options = args.options ?? {};
-  const registry = collectorRegistryFor(globalConfig);
-  const resolvedCollectors = resolveCollectors(globalConfig, args.testConfig ?? null, options);
-  const slug = checkpointSlug(args.name, args.checkpointManifest.checkpoints);
-  const checkpointDir = args.testInfo.outputPath('checkpoints', slug);
-  const collectorResults: Record<string, CollectorResult> = {};
+  const session = await createCheckpointSession(args.page, {
+    outputDir: args.testInfo.outputPath('checkpoints'),
+    manifestPath: args.testInfo.outputPath('checkpoint-manifest.json'),
+    manifest: args.checkpointManifest,
+    collectors: mergeConfig(globalConfig, args.testConfig ?? null),
+    custom: globalConfig.custom,
+    redact: globalConfig.redact,
+    testInfo: args.testInfo,
+    adjustTimeout: createAdjustTimeout(args.testInfo),
+  });
 
-  await fs.mkdir(checkpointDir, { recursive: true });
-  await settlePage(args.page);
-
-  for (const [collectorName, collectorConfig] of resolvedCollectors) {
-    const collector = registry.get(collectorName);
-    if (!collector) {
-      warn(`Collector "${collectorName}" is enabled but no implementation is registered.`);
-      continue;
-    }
-
-    try {
-      const result = await collector.collect({
-        page: args.page,
-        testInfo: args.testInfo,
-        checkpointDir,
-        checkpointName: args.name,
-        checkpointSlug: slug,
-        redact: [...(globalConfig.redact ?? [])],
-        config: cloneResolvedConfig(collectorConfig),
-        options: {
-          ...options,
-          ...(options.collectors ? { collectors: { ...options.collectors } } : {}),
-        },
-      });
-
-      collectorResults[collectorName] = result;
-      await attachArtifacts(args.testInfo, slug, collectorName, result.artifacts);
-    } catch (error) {
-      warn(`Collector "${collectorName}" failed during checkpoint "${args.name}".`, error);
-    }
+  try {
+    return await session.checkpoint(args.name, args.options);
+  } finally {
+    await session.finalize();
   }
-
-  const record: CheckpointRecord = {
-    name: args.name,
-    slug,
-    url: args.page.url(),
-    title: await collectPageTitle(args.page),
-    timestamp: new Date().toISOString(),
-    ...(options.description ? { description: options.description } : {}),
-    ...(typeof options.step === 'number' ? { step: options.step } : {}),
-    collectors: collectorResults,
-  };
-
-  args.checkpointManifest.checkpoints.push(record);
-  return record;
 }
 
 export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
@@ -456,23 +240,21 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
     },
 
     checkpoint: async ({ page, checkpointManifest, testCheckpointConfig }, use, testInfo) => {
-      const registry = collectorRegistryFor(globalConfig);
-      await runCollectorSetup(registry.values(), page, testInfo);
+      const session = await createCheckpointSession(page, {
+        outputDir: testInfo.outputPath('checkpoints'),
+        manifestPath: testInfo.outputPath('checkpoint-manifest.json'),
+        manifest: checkpointManifest,
+        collectors: mergeConfig(globalConfig, testCheckpointConfig.get()),
+        custom: globalConfig.custom,
+        redact: globalConfig.redact,
+        testInfo,
+        adjustTimeout: createAdjustTimeout(testInfo),
+      });
 
       try {
-        await use(async (name, options = {}) =>
-          captureCheckpointRecord({
-            globalConfig,
-            page,
-            testInfo,
-            checkpointManifest,
-            testConfig: testCheckpointConfig.get(),
-            name,
-            options,
-          }),
-        );
+        await use((name, options = {}) => session.checkpoint(name, options));
       } finally {
-        await runCollectorTeardown(registry.values(), page, testInfo);
+        await session.finalize();
       }
     },
   });
@@ -482,5 +264,5 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
 
 export const expect = loadPlaywright().expect;
 export const { test } = createCheckpoint();
-export { createDeviceProfile };
+export { createCheckpointSession, createDeviceProfile, registerBuiltinCollector, resolveCollectors, sanitizeSegment, settlePage, warn };
 export type { DeviceProfile, TestCheckpointConfigController };

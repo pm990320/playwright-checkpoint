@@ -1,4 +1,5 @@
 export type * from './types';
+export * from './core';
 export * from './fixture';
 export { type CheckpointCollector } from './types';
 export { type ReportGenerator } from './types';
