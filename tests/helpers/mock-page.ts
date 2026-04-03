@@ -18,6 +18,9 @@ export class MockPage extends EventEmitter {
     return undefined;
   });
   locatorBoundingBoxImpl = vi.fn(async () => null);
+  locatorAriaSnapshotImpl = vi.fn(async () => null as unknown);
+  accessibilitySnapshotImpl = vi.fn(async () => null as unknown);
+  contextCookiesImpl = vi.fn(async () => [] as unknown[]);
 
   url(): string {
     return this.urlValue;
@@ -31,10 +34,21 @@ export class MockPage extends EventEmitter {
     return this.screenshotImpl(options) as Promise<Buffer | undefined>;
   }
 
-  locator(selector: string): { boundingBox: () => Promise<unknown> } {
+  locator(selector: string): { boundingBox: () => Promise<unknown>; ariaSnapshot: () => Promise<unknown> } {
     void selector;
     return {
       boundingBox: this.locatorBoundingBoxImpl,
+      ariaSnapshot: this.locatorAriaSnapshotImpl,
+    };
+  }
+
+  accessibility = {
+    snapshot: (options?: unknown) => this.accessibilitySnapshotImpl(options),
+  };
+
+  context(): { cookies: () => Promise<unknown[]> } {
+    return {
+      cookies: this.contextCookiesImpl,
     };
   }
 
@@ -87,6 +101,7 @@ export function createCollectorContext(options?: {
   checkpointDir?: string;
   checkpointName?: string;
   checkpointSlug?: string;
+  redact?: string[];
   config?: ResolvedCollectorConfig;
   checkpointOptions?: CheckpointOptions;
 }) {
@@ -99,6 +114,7 @@ export function createCollectorContext(options?: {
     checkpointDir: options?.checkpointDir ?? '/tmp/checkpoint',
     checkpointName: options?.checkpointName ?? 'Homepage',
     checkpointSlug: options?.checkpointSlug ?? 'homepage',
+    redact: options?.redact ?? [],
     config: options?.config ?? {},
     options: options?.checkpointOptions ?? {},
   };

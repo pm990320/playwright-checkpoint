@@ -122,6 +122,8 @@ export type CollectorContext = {
   checkpointDir: string;
   checkpointName: string;
   checkpointSlug: string;
+  /** Global redact patterns plus any collector-specific overrides. */
+  redact: string[];
   config: ResolvedCollectorConfig;
   options: CheckpointOptions;
 };
@@ -234,6 +236,99 @@ export type PageMetadata = {
   lang: string | null;
   viewport: string | null;
   structuredData: unknown[];
+};
+
+export type AriaSnapshotCollectorData = {
+  snapshot: unknown | null;
+  nodeCount: number;
+};
+
+export type DomStatsCollectorData = {
+  nodeCount: number;
+  maxDepth: number;
+  formCount: number;
+  imageCount: number;
+  scriptCount: number;
+  stylesheetCount: number;
+  eventListenerCount: number | null;
+};
+
+export type FormFieldValue = string | string[] | null;
+
+export type FormFieldState = {
+  tagName: 'input' | 'select' | 'textarea';
+  type: string | null;
+  name: string | null;
+  id: string | null;
+  label: string | null;
+  placeholder: string | null;
+  value: FormFieldValue;
+  checked: boolean | null;
+  disabled: boolean;
+  required: boolean;
+  redacted: boolean;
+};
+
+export type FormsCollectorData = {
+  fieldCount: number;
+  redactedCount: number;
+  fields: FormFieldState[];
+};
+
+export type StorageCookieState = {
+  name: string;
+  domain: string;
+  path: string;
+  value: string | null;
+  redacted: boolean;
+  expires: number;
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: string;
+};
+
+export type StorageEntryState = {
+  key: string;
+  value: string | null;
+  redacted: boolean;
+};
+
+export type StorageCollectorData = {
+  cookieCount: number;
+  localStorageKeyCount: number;
+  cookies: StorageCookieState[];
+  localStorage: StorageEntryState[];
+};
+
+export type NetworkTimingBreakdown = {
+  startTimeMs: number | null;
+  redirectMs: number | null;
+  dnsMs: number | null;
+  connectMs: number | null;
+  tlsMs: number | null;
+  requestMs: number | null;
+  responseMs: number | null;
+};
+
+export type NetworkTimingRecord = {
+  url: string;
+  status: number | null;
+  statusText: string | null;
+  resourceType: string | null;
+  timestamp: string;
+  durationMs: number | null;
+  transferSize: number | null;
+  encodedBodySize: number | null;
+  decodedBodySize: number | null;
+  nextHopProtocol: string | null;
+  timing: NetworkTimingBreakdown;
+};
+
+export type NetworkTimingCollectorData = {
+  requestCount: number;
+  totalBytes: number;
+  slowestRequestMs: number;
+  requests: NetworkTimingRecord[];
 };
 
 // ---------------------------------------------------------------------------

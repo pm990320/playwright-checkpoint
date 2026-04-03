@@ -72,11 +72,17 @@ All built-in collectors are registered automatically.
 | `console` | On | New console errors and page errors since the last checkpoint | `console-errors.json` |
 | `network` | On | Failed requests and HTTP 4xx/5xx responses since the last checkpoint | `failed-requests.json` |
 | `metadata` | On | Title, description, canonical URL, OG tags, language, viewport, JSON-LD | `metadata.json` |
+| `aria-snapshot` | Off | Accessibility tree snapshot for machine-readable a11y state | `aria-snapshot.json` |
+| `dom-stats` | Off | DOM size/depth and element counts | `dom-stats.json` |
+| `forms` | Off | Visible form field state with configurable redaction | `form-state.json` |
+| `storage` | Off | Cookie metadata and localStorage key/value state (optional values) | `storage-state.json` |
+| `network-timing` | Off | Incremental response timing and transfer size breakdown | `network-timing.json` |
 
 Notes:
 
 - `@axe-core/playwright` is an optional dependency. If it is unavailable, the `axe` collector skips gracefully.
 - Screenshot options such as `fullPage` and `highlightSelector` are passed per checkpoint.
+- Extended collectors (`aria-snapshot`, `dom-stats`, `forms`, `storage`, `network-timing`) are opt-in by default.
 - Collector artifacts are also attached to the Playwright test result when possible.
 
 ---
@@ -528,6 +534,11 @@ Exported collector instances:
 - `consoleCollector`
 - `networkCollector`
 - `metadataCollector`
+- `ariaSnapshotCollector`
+- `domStatsCollector`
+- `formsCollector`
+- `storageCollector`
+- `networkTimingCollector`
 
 Collector registry utilities:
 
@@ -572,6 +583,17 @@ Key exported types include:
 - `ConsoleErrorRecord`
 - `FailedRequestRecord`
 - `PageMetadata`
+- `AriaSnapshotCollectorData`
+- `DomStatsCollectorData`
+- `FormFieldValue`
+- `FormFieldState`
+- `FormsCollectorData`
+- `StorageCookieState`
+- `StorageEntryState`
+- `StorageCollectorData`
+- `NetworkTimingBreakdown`
+- `NetworkTimingRecord`
+- `NetworkTimingCollectorData`
 - `ReporterConfig`
 - `ReportGenerator`
 - `ReportGeneratorContext`
