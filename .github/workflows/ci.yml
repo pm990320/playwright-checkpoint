@@ -102,6 +102,5 @@ jobs:
       - name: Install Playwright Chromium
         working-directory: examples/basic
         run: npx playwright install --with-deps chromium
-      - name: Run example smoke test
-        working-directory: examples/basic
-        run: npx playwright test
+      - name: Run example integration test
+        run: bun run test:example-basic

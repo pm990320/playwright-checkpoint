@@ -73,6 +73,7 @@
     "check-types": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:example-basic": "node ./scripts/test-example-basic.mjs",
     "prepack": "bun run build",
     "pack:check": "npm pack --dry-run"
   },

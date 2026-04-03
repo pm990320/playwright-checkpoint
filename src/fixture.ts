@@ -199,6 +199,8 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
 
   const test = base.extend<CheckpointFixtures>({
     checkpointManifest: [
+      // Playwright fixture callbacks must use object destructuring for the first arg.
+      // eslint-disable-next-line no-empty-pattern
       async ({}, use, testInfo) => {
         const manifest = createCheckpointManifestRecord(testInfo);
 
@@ -215,6 +217,8 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
       { auto: true },
     ],
 
+    // Playwright fixture callbacks must use object destructuring for the first arg.
+    // eslint-disable-next-line no-empty-pattern
     testCheckpointConfig: async ({}, use) => {
       let current: TestCheckpointConfig | null = null;
 
@@ -235,6 +239,8 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
       await use(controller);
     },
 
+    // Playwright fixture callbacks must use object destructuring for the first arg.
+    // eslint-disable-next-line no-empty-pattern
     deviceProfile: async ({}, use, testInfo) => {
       await use(createDeviceProfile(testInfo));
     },
