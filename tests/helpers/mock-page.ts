@@ -6,7 +6,7 @@ import type { CheckpointOptions, ResolvedCollectorConfig } from '../../src/types
 export class MockPage extends EventEmitter {
   urlValue = 'https://example.com/';
   titleValue = 'Example';
-  screenshotImpl = vi.fn(async () => undefined);
+  screenshotImpl = vi.fn(async () => undefined as Buffer | undefined);
   contentImpl = vi.fn(async () => '<html></html>');
   waitForLoadStateImpl = vi.fn(async () => undefined);
   waitForTimeoutImpl = vi.fn(async () => undefined);
@@ -27,8 +27,8 @@ export class MockPage extends EventEmitter {
     return this.titleValue;
   }
 
-  async screenshot(options?: unknown): Promise<void> {
-    await this.screenshotImpl(options);
+  async screenshot(options?: unknown): Promise<Buffer | undefined> {
+    return this.screenshotImpl(options) as Promise<Buffer | undefined>;
   }
 
   locator(selector: string): { boundingBox: () => Promise<unknown> } {

@@ -5,6 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screenshotCollector } from '../../src/collectors';
 import { createCollectorContext, MockPage } from '../helpers/mock-page';
 
+const ONE_BY_ONE_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0ioAAAAASUVORK5CYII=',
+  'base64',
+);
+
 async function makeCheckpointDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'playwright-checkpoint-screenshot-'));
 }
@@ -20,7 +25,8 @@ describe('screenshotCollector', () => {
     page.locatorBoundingBoxImpl.mockResolvedValue({ x: 10, y: 20, width: 30, height: 40 });
     page.screenshotImpl.mockImplementation(async (options?: unknown) => {
       const screenshotPath = (options as { path: string }).path;
-      await fs.writeFile(screenshotPath, 'png');
+      await fs.writeFile(screenshotPath, ONE_BY_ONE_PNG);
+      return ONE_BY_ONE_PNG;
     });
 
     const result = await screenshotCollector.collect(
@@ -38,6 +44,8 @@ describe('screenshotCollector', () => {
     expect(result.data).toEqual({
       fullPage: false,
       highlightBounds: { x: 10, y: 20, width: 30, height: 40 },
+      highlightSelector: '#hero',
+      imageSize: { width: 1, height: 1 },
     });
     expect(result.artifacts).toEqual([
       {
@@ -47,6 +55,6 @@ describe('screenshotCollector', () => {
       },
     ]);
     expect(result.summary).toEqual({ screenshotPath: 'page.png' });
-    expect(await fs.readFile(path.join(checkpointDir, 'page.png'), 'utf8')).toBe('png');
+    expect(await fs.readFile(path.join(checkpointDir, 'page.png'))).toEqual(ONE_BY_ONE_PNG);
   });
 });

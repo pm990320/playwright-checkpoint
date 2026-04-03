@@ -85,6 +85,12 @@ async function manifestFixture(
   overrides: Partial<CheckpointManifest> = {},
 ): Promise<CheckpointManifest> {
   const landingCollectors = await writeCollectorArtifacts(root, 'landing');
+  landingCollectors.screenshot.data = {
+    fullPage: true,
+    highlightBounds: { x: 10, y: 12, width: 28, height: 18 },
+    highlightSelector: '#hero',
+    imageSize: { width: 100, height: 100 },
+  };
   const checkoutCollectors = await writeCollectorArtifacts(root, 'checkout');
 
   return {
@@ -314,6 +320,7 @@ describe('report utilities', () => {
       summary: 'Generated HTML report for 1 story (1 run).',
     });
     expect(results).not.toHaveProperty('markdown');
+    expect(results).not.toHaveProperty('mdx');
     expect(html).toContain('<!doctype html>');
     expect(html).toContain('Playwright Checkpoint Report');
     expect(html).toContain('Checkout story');
@@ -323,12 +330,20 @@ describe('report utilities', () => {
     expect(html).toContain('Expand all');
     expect(html).toContain('Console');
     expect(html).toContain('failed-requests.json');
+    expect(html).toContain('highlight-overlay');
+    expect(html).toContain('Focus: #hero');
   });
 
   it('generates Markdown help articles when enabled', async () => {
     const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
     const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
     const loginCollectors = await writeCollectorArtifacts(testResultsDir, 'login-page');
+    loginCollectors.screenshot.data = {
+      fullPage: true,
+      highlightBounds: { x: 12, y: 18, width: 36, height: 24 },
+      highlightSelector: '#login-form',
+      imageSize: { width: 120, height: 80 },
+    };
     const signInCollectors = await writeCollectorArtifacts(testResultsDir, 'sign-in');
 
     await writeManifestFile(testResultsDir, {
@@ -389,9 +404,123 @@ describe('report utilities', () => {
     expect(article).toContain('![Login page](./screenshots/sign-in-to-your-account/01-navigate-to-the-login-page.png)');
     expect(article).toContain('**URL:** `/login`');
     expect(article).toContain('**Breadcrumb:** login');
+    expect(article).toContain('> Focus: `#login-form`');
     expect(article).toContain("Navigate to the login page. You'll see the login form with email and password fields.");
     expect(article).toContain('This step captures **Credentials entered** at `/login`.');
     expect(article).toContain('Need more help? Contact support.');
+  });
+
+  it('supports generating MDX articles with device variants', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-mdx-');
+    const desktopCollectors = await writeCollectorArtifacts(testResultsDir, 'login-desktop');
+    desktopCollectors.screenshot.data = {
+      fullPage: true,
+      highlightBounds: { x: 14, y: 20, width: 30, height: 16 },
+      highlightSelector: '#login-form',
+      imageSize: { width: 100, height: 100 },
+    };
+    const mobileCollectors = await writeCollectorArtifacts(testResultsDir, 'login-mobile');
+
+    await writeManifestFile(
+      path.join(testResultsDir, 'desktop'),
+      {
+        environment: 'test',
+        project: 'desktop-light',
+        testId: 't-mdx',
+        title: 'Sign in to your account @authentication @onboarding',
+        tags: ['@authentication', '@onboarding'],
+        startedAt: '2026-04-03T00:00:00.000Z',
+        checkpoints: [
+          {
+            name: 'Navigate to the login page',
+            slug: 'navigate-to-the-login-page',
+            url: 'https://example.com/login',
+            title: 'Login page',
+            timestamp: '2026-04-03T00:00:01.000Z',
+            description: 'Navigate to `/login`. You\'ll see the login form.',
+            step: 1,
+            collectors: desktopCollectors,
+          },
+          {
+            name: 'Enter credentials',
+            slug: 'enter-credentials',
+            url: 'https://example.com/login',
+            title: 'Filled form',
+            timestamp: '2026-04-03T00:00:02.000Z',
+            description: 'Enter your email and password, then click **Sign In**.',
+            step: 2,
+            collectors: await writeCollectorArtifacts(testResultsDir, 'credentials-desktop'),
+          },
+        ],
+      },
+      'checkpoint-manifest.json',
+    );
+
+    await writeManifestFile(
+      path.join(testResultsDir, 'mobile'),
+      {
+        environment: 'test',
+        project: 'mobile-light',
+        testId: 't-mdx-mobile',
+        title: 'Sign in to your account @authentication @onboarding',
+        tags: ['@authentication', '@onboarding'],
+        startedAt: '2026-04-03T00:01:00.000Z',
+        checkpoints: [
+          {
+            name: 'Navigate to the login page',
+            slug: 'navigate-to-the-login-page',
+            url: 'https://example.com/login',
+            title: 'Login page mobile',
+            timestamp: '2026-04-03T00:01:01.000Z',
+            description: 'Navigate to `/login`. You\'ll see the login form.',
+            step: 1,
+            collectors: mobileCollectors,
+          },
+          {
+            name: 'Enter credentials',
+            slug: 'enter-credentials',
+            url: 'https://example.com/login',
+            title: 'Filled form mobile',
+            timestamp: '2026-04-03T00:01:02.000Z',
+            description: 'Enter your email and password, then click **Sign In**.',
+            step: 2,
+            collectors: await writeCollectorArtifacts(testResultsDir, 'credentials-mobile'),
+          },
+        ],
+      },
+      'checkpoint-manifest.json',
+    );
+
+    const results = await runReporters(
+      {
+        reporters: {
+          html: false,
+          mdx: {
+            includeTags: ['@authentication'],
+          },
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const articlePath = path.join(outputDir, 'sign-in-to-your-account.mdx');
+    const article = await fs.readFile(articlePath, 'utf8');
+
+    expect(results.mdx?.summary).toBe('Generated 1 MDX article.');
+    expect(article).toContain('title: "Sign in to your account"');
+    expect(article).toContain('import { Screenshot, StepList, Step, DeviceTabs, DeviceTab } from \'playwright-checkpoint/components\';');
+    expect(article).toContain('<DeviceTabs>');
+    expect(article).toContain('<DeviceTab label={"Desktop / Light"}>');
+    expect(article).toContain('<DeviceTab label={"Mobile / Light"}>');
+    expect(article).toContain('<Step number={1} title={"Navigate to the login page"}>');
+    expect(article).toContain('Focus: `#login-form`');
+    expect(article).toContain('Navigate to `/login`. You\'ll see the login form.');
+    expect(article).toContain('Enter your email and password, then click **Sign In**.');
+    expect(article).toContain('tags:');
+    expect(article).toContain('- "authentication"');
+    expect(article).toContain('- "onboarding"');
   });
 
   it('supports generating Markdown articles from tag filters', async () => {

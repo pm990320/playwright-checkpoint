@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { CheckpointRecord, ReportGenerator, RunRecord } from '../types';
-import { groupByStory, orderedCheckpointNames } from './index';
+import type { CheckpointRecord, ReportGenerator, RunRecord, ScreenshotCollectorData } from '../types';
+import { groupByStory, orderedCheckpointNames } from './story-utils';
 
 type HtmlReporterConfig = {
   title?: string;
@@ -76,6 +76,49 @@ function getCollectorSummaryNumber(checkpoint: CheckpointRecord, collectorName: 
   return typeof value === 'number' ? value : null;
 }
 
+function screenshotData(checkpoint: CheckpointRecord): Partial<ScreenshotCollectorData> | null {
+  const data = checkpoint.collectors.screenshot?.data;
+  return data && typeof data === 'object' ? (data as Partial<ScreenshotCollectorData>) : null;
+}
+
+function highlightOverlayStyle(checkpoint: CheckpointRecord): string | null {
+  const data = screenshotData(checkpoint);
+  const bounds = data?.highlightBounds;
+  const imageSize = data?.imageSize;
+
+  if (
+    !bounds ||
+    !imageSize ||
+    typeof bounds.x !== 'number' ||
+    typeof bounds.y !== 'number' ||
+    typeof bounds.width !== 'number' ||
+    typeof bounds.height !== 'number' ||
+    typeof imageSize.width !== 'number' ||
+    typeof imageSize.height !== 'number' ||
+    imageSize.width <= 0 ||
+    imageSize.height <= 0
+  ) {
+    return null;
+  }
+
+  const left = (bounds.x / imageSize.width) * 100;
+  const top = (bounds.y / imageSize.height) * 100;
+  const width = (bounds.width / imageSize.width) * 100;
+  const height = (bounds.height / imageSize.height) * 100;
+
+  return [
+    `left:${left.toFixed(4)}%`,
+    `top:${top.toFixed(4)}%`,
+    `width:${width.toFixed(4)}%`,
+    `height:${height.toFixed(4)}%`,
+  ].join(';');
+}
+
+function highlightLabel(checkpoint: CheckpointRecord): string | null {
+  const selector = screenshotData(checkpoint)?.highlightSelector;
+  return typeof selector === 'string' && selector.trim().length > 0 ? `Focus: ${selector.trim()}` : null;
+}
+
 function resolveArtifactPath(run: RunRecord, artifactPath: string): string {
   return path.isAbsolute(artifactPath) ? artifactPath : path.resolve(path.dirname(run.sourceManifestPath), artifactPath);
 }
@@ -146,6 +189,8 @@ function renderCheckpointCard(run: RunRecord, checkpointName: string, outputDir:
   }
 
   const screenshotHref = getArtifactHref(run, checkpoint, outputDir, 'screenshot', 'screenshot');
+  const overlayStyle = highlightOverlayStyle(checkpoint);
+  const focus = highlightLabel(checkpoint);
   const axeViolations = getCollectorSummaryNumber(checkpoint, 'axe', 'violations');
   const consoleErrors = getCollectorSummaryNumber(checkpoint, 'console', 'consoleErrorCount') ?? 0;
   const failedRequests = getCollectorSummaryNumber(checkpoint, 'network', 'failedRequestCount') ?? 0;
@@ -165,7 +210,11 @@ function renderCheckpointCard(run: RunRecord, checkpointName: string, outputDir:
       </p>
       ${
         screenshotHref
-          ? `<a class="thumbnail-link" href="${screenshotHref}" target="_blank" rel="noreferrer"><img src="${screenshotHref}" alt="${escapeHtml(`${run.project} — ${checkpoint.name}`)}" loading="lazy" /></a>`
+          ? `<a class="thumbnail-link" href="${screenshotHref}" target="_blank" rel="noreferrer">
+              <img src="${screenshotHref}" alt="${escapeHtml(`${run.project} — ${checkpoint.name}`)}" loading="lazy" />
+              ${overlayStyle ? `<span class="highlight-overlay" style="${overlayStyle}" aria-hidden="true"></span>` : ''}
+              ${focus ? `<span class="highlight-label">${escapeHtml(focus)}</span>` : ''}
+            </a>`
           : '<div class="empty-card">Screenshot unavailable.</div>'
       }
       <div class="stats-grid">
@@ -458,6 +507,7 @@ function buildHtmlReport(runs: RunRecord[], outputDir: string, config: HtmlRepor
       font-size: 0.82rem;
     }
     .thumbnail-link {
+      position: relative;
       display: block;
       border-radius: 14px;
       overflow: hidden;
@@ -469,6 +519,28 @@ function buildHtmlReport(runs: RunRecord[], outputDir: string, config: HtmlRepor
       width: 100%;
       aspect-ratio: 16 / 10;
       object-fit: cover;
+    }
+    .highlight-overlay {
+      position: absolute;
+      border: 2px solid var(--danger);
+      border-radius: 12px;
+      background: rgba(251, 113, 133, 0.08);
+      box-shadow: 0 0 0 999px rgba(251, 113, 133, 0.02);
+      pointer-events: none;
+    }
+    .highlight-label {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      max-width: calc(100% - 24px);
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(251, 113, 133, 0.35);
+      color: #ffe4e6;
+      font-size: 0.74rem;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
     }
     .stats-grid {
       display: grid;

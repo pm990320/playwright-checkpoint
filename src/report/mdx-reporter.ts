@@ -3,28 +3,33 @@ import path from 'node:path';
 import type { CheckpointRecord, ReportGenerator, RunRecord, ScreenshotCollectorData } from '../types';
 import { groupByStory } from './story-utils';
 
-type MarkdownReporterConfig = {
+type MdxReporterConfig = {
   storiesDir?: string;
   screenshotsDir?: string;
   includeTags?: string[];
   preferredProject?: string;
-  header?: string;
-  footer?: string;
-  frontmatter?: boolean | Record<string, unknown>;
   imagePathPrefix?: string;
   copyScreenshots?: boolean;
+  componentImportPath?: string;
 };
 
-type MarkdownStep = {
+type MdxVariant = {
+  project: string;
+  projectLabel: string;
+  imagePath: string | null;
+  imageAlt: string;
+};
+
+type MdxStep = {
   checkpoint: CheckpointRecord;
   order: number;
-  heading: string;
+  title: string;
   description: string;
-  imagePath: string | null;
-  urlLabel: string;
-  breadcrumbLabel: string | null;
   focusNote: string | null;
+  variants: MdxVariant[];
 };
+
+const DEFAULT_PROJECT_ORDER = ['desktop-light', 'desktop-dark', 'mobile-light', 'mobile-dark'];
 
 function slugify(value: string): string {
   return (
@@ -41,7 +46,7 @@ function stripTags(value: string): string {
   return stripped || value.trim() || 'Untitled story';
 }
 
-function normalizeConfig(config: Record<string, unknown>): MarkdownReporterConfig {
+function normalizeConfig(config: Record<string, unknown>): MdxReporterConfig {
   return {
     storiesDir: typeof config.storiesDir === 'string' ? config.storiesDir : '.',
     screenshotsDir: typeof config.screenshotsDir === 'string' ? config.screenshotsDir : 'screenshots',
@@ -49,16 +54,10 @@ function normalizeConfig(config: Record<string, unknown>): MarkdownReporterConfi
       ? config.includeTags.filter((value): value is string => typeof value === 'string')
       : undefined,
     preferredProject: typeof config.preferredProject === 'string' ? config.preferredProject : undefined,
-    header: typeof config.header === 'string' ? config.header : undefined,
-    footer: typeof config.footer === 'string' ? config.footer : undefined,
-    frontmatter:
-      config.frontmatter === true ||
-      config.frontmatter === false ||
-      (config.frontmatter != null && typeof config.frontmatter === 'object' && !Array.isArray(config.frontmatter))
-        ? (config.frontmatter as MarkdownReporterConfig['frontmatter'])
-        : false,
     imagePathPrefix: typeof config.imagePathPrefix === 'string' ? config.imagePathPrefix : undefined,
     copyScreenshots: typeof config.copyScreenshots === 'boolean' ? config.copyScreenshots : true,
+    componentImportPath:
+      typeof config.componentImportPath === 'string' ? config.componentImportPath : 'playwright-checkpoint/components',
   };
 }
 
@@ -66,7 +65,11 @@ function normalizeTags(tags: string[] | undefined): string[] {
   return (tags ?? []).map((tag) => tag.trim().toLowerCase()).filter(Boolean);
 }
 
-function shouldIncludeRun(run: RunRecord, config: MarkdownReporterConfig): boolean {
+function frontmatterTags(tags: string[]): string[] {
+  return normalizeTags(tags).map((tag) => tag.replace(/^@+/, '')).filter(Boolean);
+}
+
+function shouldIncludeRun(run: RunRecord, config: MdxReporterConfig): boolean {
   const includeTags = normalizeTags(config.includeTags);
   if (includeTags.length > 0) {
     const runTags = new Set(normalizeTags(run.tags));
@@ -99,6 +102,18 @@ function choosePrimaryRun(runs: RunRecord[], preferredProject?: string): RunReco
 
     return left.project.localeCompare(right.project);
   })[0] ?? null;
+}
+
+function orderedCheckpoints(checkpoints: CheckpointRecord[]): CheckpointRecord[] {
+  return [...checkpoints].sort((left, right) => {
+    const leftOrder = typeof left.step === 'number' ? left.step : Number.MAX_SAFE_INTEGER;
+    const rightOrder = typeof right.step === 'number' ? right.step : Number.MAX_SAFE_INTEGER;
+    if (leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+
+    return checkpoints.indexOf(left) - checkpoints.indexOf(right);
+  });
 }
 
 function resolveArtifactPath(run: RunRecord, artifactPath: string): string {
@@ -147,24 +162,6 @@ function urlLabel(url: string): string {
   }
 }
 
-function breadcrumbLabel(url: string): string | null {
-  const label = urlLabel(url);
-  if (!label.startsWith('/')) {
-    return null;
-  }
-
-  const [withoutQuery = label] = label.split('?');
-  const [withoutHash = withoutQuery] = withoutQuery.split('#');
-
-  const segments = withoutHash
-    .split('/')
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .map((segment) => decodeURIComponent(segment).replace(/[-_]+/g, ' '));
-
-  return segments.length > 0 ? segments.join(' › ') : 'home';
-}
-
 function autoDescription(checkpoint: CheckpointRecord): string {
   const pageTitle = checkpoint.title.trim();
   const location = urlLabel(checkpoint.url);
@@ -185,13 +182,13 @@ function markdownRelativePath(fromFile: string, toFile: string): string {
   return `./${relativePath}`;
 }
 
-function rewriteImagePath(markdownFile: string, imageFile: string, outputDir: string, prefix?: string): string {
+function rewriteImagePath(mdxFile: string, imageFile: string, outputDir: string, prefix?: string): string {
   const relativePath = path.relative(outputDir, imageFile).split(path.sep).join('/');
   if (prefix) {
     return `${prefix.replace(/\/+$/g, '')}/${relativePath.replace(/^\/+/, '')}`;
   }
 
-  return markdownRelativePath(markdownFile, imageFile);
+  return markdownRelativePath(mdxFile, imageFile);
 }
 
 function yamlScalar(value: unknown): string {
@@ -226,14 +223,63 @@ function serializeFrontmatter(fields: Record<string, unknown>): string {
   return lines.join('\n');
 }
 
+function quoteJsx(value: string): string {
+  return JSON.stringify(value);
+}
+
+function projectWeight(projectName: string): number {
+  const index = DEFAULT_PROJECT_ORDER.indexOf(projectName);
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function formatProjectLabel(projectName: string): string {
+  const [device, mode] = projectName.split('-');
+  if (!device || !mode) {
+    return projectName;
+  }
+
+  const deviceLabel = device === 'desktop' ? 'Desktop' : device === 'mobile' ? 'Mobile' : device;
+  const modeLabel = mode === 'light' ? 'Light' : mode === 'dark' ? 'Dark' : mode;
+  return `${deviceLabel} / ${modeLabel}`;
+}
+
+function sortRunsForVariants(runs: RunRecord[]): RunRecord[] {
+  return [...runs].sort((left, right) => {
+    const byWeight = projectWeight(left.project) - projectWeight(right.project);
+    if (byWeight !== 0) {
+      return byWeight;
+    }
+
+    return left.project.localeCompare(right.project);
+  });
+}
+
+function findMatchingCheckpoint(run: RunRecord, baseCheckpoint: CheckpointRecord, fallbackIndex: number): CheckpointRecord | null {
+  const checkpoints = orderedCheckpoints(run.checkpoints);
+
+  if (typeof baseCheckpoint.step === 'number') {
+    const byStep = checkpoints.find((entry) => entry.step === baseCheckpoint.step);
+    if (byStep) {
+      return byStep;
+    }
+  }
+
+  const byName = checkpoints.find((entry) => entry.name === baseCheckpoint.name);
+  if (byName) {
+    return byName;
+  }
+
+  return checkpoints[fallbackIndex] ?? null;
+}
+
 async function materializeScreenshot(args: {
   run: RunRecord;
   checkpoint: CheckpointRecord;
   storySlug: string;
   stepOrder: number;
   outputDir: string;
-  markdownFile: string;
-  config: MarkdownReporterConfig;
+  mdxFile: string;
+  config: MdxReporterConfig;
   writtenFiles: Set<string>;
 }): Promise<string | null> {
   const sourcePath = screenshotSourcePath(args.run, args.checkpoint);
@@ -246,7 +292,7 @@ async function materializeScreenshot(args: {
     args.outputDir,
     args.config.screenshotsDir ?? 'screenshots',
     args.storySlug,
-    `${String(args.stepOrder).padStart(2, '0')}-${slugify(args.checkpoint.name)}${extension}`,
+    `${String(args.stepOrder).padStart(2, '0')}-${slugify(args.run.project)}-${slugify(args.checkpoint.name)}${extension}`,
   );
 
   try {
@@ -254,124 +300,151 @@ async function materializeScreenshot(args: {
       await fs.mkdir(path.dirname(targetPath), { recursive: true });
       await fs.copyFile(sourcePath, targetPath);
       args.writtenFiles.add(targetPath);
-      return rewriteImagePath(args.markdownFile, targetPath, args.outputDir, args.config.imagePathPrefix);
+      return rewriteImagePath(args.mdxFile, targetPath, args.outputDir, args.config.imagePathPrefix);
     }
 
-    return rewriteImagePath(args.markdownFile, sourcePath, args.outputDir, args.config.imagePathPrefix);
+    return rewriteImagePath(args.mdxFile, sourcePath, args.outputDir, args.config.imagePathPrefix);
   } catch {
     return null;
   }
 }
 
-function orderedCheckpoints(checkpoints: CheckpointRecord[]): CheckpointRecord[] {
-  return [...checkpoints].sort((left, right) => {
-    const leftOrder = typeof left.step === 'number' ? left.step : Number.MAX_SAFE_INTEGER;
-    const rightOrder = typeof right.step === 'number' ? right.step : Number.MAX_SAFE_INTEGER;
-    if (leftOrder !== rightOrder) {
-      return leftOrder - rightOrder;
-    }
-
-    return checkpoints.indexOf(left) - checkpoints.indexOf(right);
-  });
-}
-
 async function buildSteps(args: {
-  run: RunRecord;
+  runs: RunRecord[];
+  primaryRun: RunRecord;
   storySlug: string;
   outputDir: string;
-  markdownFile: string;
-  config: MarkdownReporterConfig;
+  mdxFile: string;
+  config: MdxReporterConfig;
   writtenFiles: Set<string>;
-}): Promise<MarkdownStep[]> {
-  const checkpoints = orderedCheckpoints(args.run.checkpoints);
-  const steps: MarkdownStep[] = [];
+}): Promise<MdxStep[]> {
+  const baseCheckpoints = orderedCheckpoints(args.primaryRun.checkpoints);
+  const sortedRuns = sortRunsForVariants(args.runs);
+  const steps: MdxStep[] = [];
 
-  for (const [index, checkpoint] of checkpoints.entries()) {
+  for (const [index, checkpoint] of baseCheckpoints.entries()) {
     const order = typeof checkpoint.step === 'number' ? checkpoint.step : index + 1;
+    const variants: MdxVariant[] = [];
+    const matchedCheckpoints: CheckpointRecord[] = [];
+
+    for (const run of sortedRuns) {
+      const variantCheckpoint = findMatchingCheckpoint(run, checkpoint, index);
+      if (!variantCheckpoint) {
+        continue;
+      }
+
+      matchedCheckpoints.push(variantCheckpoint);
+      variants.push({
+        project: run.project,
+        projectLabel: formatProjectLabel(run.project),
+        imagePath: await materializeScreenshot({
+          run,
+          checkpoint: variantCheckpoint,
+          storySlug: args.storySlug,
+          stepOrder: order,
+          outputDir: args.outputDir,
+          mdxFile: args.mdxFile,
+          config: args.config,
+          writtenFiles: args.writtenFiles,
+        }),
+        imageAlt: variantCheckpoint.title || `${checkpoint.name} (${formatProjectLabel(run.project)})`,
+      });
+    }
+
+    const descriptionSource = matchedCheckpoints.find(
+      (entry) => typeof entry.description === 'string' && entry.description.trim().length > 0,
+    ) ?? checkpoint;
+    const stepFocus = matchedCheckpoints.map((entry) => focusNote(entry)).find((value): value is string => Boolean(value)) ?? null;
+
     steps.push({
       checkpoint,
       order,
-      heading: checkpoint.name,
+      title: checkpoint.name,
       description:
-        typeof checkpoint.description === 'string' && checkpoint.description.trim().length > 0
-          ? checkpoint.description.trim()
-          : autoDescription(checkpoint),
-      imagePath: await materializeScreenshot({
-        run: args.run,
-        checkpoint,
-        storySlug: args.storySlug,
-        stepOrder: order,
-        outputDir: args.outputDir,
-        markdownFile: args.markdownFile,
-        config: args.config,
-        writtenFiles: args.writtenFiles,
-      }),
-      urlLabel: urlLabel(checkpoint.url),
-      breadcrumbLabel: breadcrumbLabel(checkpoint.url),
-      focusNote: focusNote(checkpoint),
+        typeof descriptionSource.description === 'string' && descriptionSource.description.trim().length > 0
+          ? descriptionSource.description.trim()
+          : autoDescription(descriptionSource),
+      focusNote: stepFocus,
+      variants,
     });
   }
 
   return steps;
 }
 
-function renderMarkdown(args: {
-  title: string;
-  steps: MarkdownStep[];
-  run: RunRecord;
-  config: MarkdownReporterConfig;
-  generatedAt: string;
-}): string {
-  const frontmatterFields =
-    args.config.frontmatter === true || typeof args.config.frontmatter === 'object'
-      ? {
-          title: args.title,
-          project: args.run.project,
-          testId: args.run.testId,
-          tags: args.run.tags,
-          startedAt: args.run.startedAt,
-          generatedAt: args.generatedAt,
-          ...(args.config.frontmatter && typeof args.config.frontmatter === 'object' ? args.config.frontmatter : {}),
-        }
-      : null;
+function renderVariantTabs(variants: MdxVariant[]): string {
+  if (variants.length === 0) {
+    return '';
+  }
 
-  const sections = args.steps
-    .map((step) => {
-      const lines = [`## Step ${step.order}: ${step.heading}`, ''];
+  if (variants.length === 1) {
+    const [variant] = variants;
+    if (!variant?.imagePath) {
+      return '';
+    }
 
-      if (step.imagePath) {
-        lines.push(`![${step.checkpoint.title || step.heading}](${step.imagePath})`, '');
+    return `<Screenshot src={${quoteJsx(variant.imagePath)}} alt={${quoteJsx(variant.imageAlt)}} />`;
+  }
+
+  const tabs = variants
+    .map((variant) => {
+      const lines = [`  <DeviceTab label={${quoteJsx(variant.projectLabel)}}>`];
+      if (variant.imagePath) {
+        lines.push(`    <Screenshot src={${quoteJsx(variant.imagePath)}} alt={${quoteJsx(variant.imageAlt)}} />`);
+      } else {
+        lines.push(`    <p>No screenshot captured for ${variant.projectLabel}.</p>`);
       }
-
-      lines.push(`**URL:** \`${step.urlLabel}\``);
-      if (step.breadcrumbLabel) {
-        lines.push('', `**Breadcrumb:** ${step.breadcrumbLabel}`);
-      }
-
-      if (step.focusNote) {
-        lines.push('', `> ${step.focusNote}`);
-      }
-
-      lines.push('', step.description);
-
+      lines.push('  </DeviceTab>');
       return lines.join('\n');
     })
-    .join('\n\n');
+    .join('\n');
 
-  const parts = [
-    frontmatterFields ? serializeFrontmatter(frontmatterFields) : '',
-    `# ${args.title}`,
-    args.config.header ? args.config.header.trim() : '',
-    sections,
-    args.config.footer ? args.config.footer.trim() : '',
-  ].filter((value) => value.trim().length > 0);
-
-  return `${parts.join('\n\n')}\n`;
+  return `<DeviceTabs>\n${tabs}\n</DeviceTabs>`;
 }
 
-export const markdownReporter: ReportGenerator = {
-  name: 'markdown',
-  description: 'Generates one Markdown help article per captured story.',
+function renderStep(step: MdxStep): string {
+  const lines = [`  <Step number={${step.order}} title={${quoteJsx(step.title)}}>`];
+  const variantBlock = renderVariantTabs(step.variants);
+  if (variantBlock) {
+    lines.push(`    ${variantBlock.replace(/\n/g, '\n    ')}`, '');
+  }
+
+  if (step.focusNote) {
+    lines.push(`    ${step.focusNote}`, '');
+  }
+
+  lines.push(`    ${step.description}`, '  </Step>');
+  return lines.join('\n');
+}
+
+function renderMdx(args: {
+  title: string;
+  steps: MdxStep[];
+  runs: RunRecord[];
+  config: MdxReporterConfig;
+  generatedAt: string;
+}): string {
+  const importNames = new Set(['Screenshot', 'StepList', 'Step']);
+  if (args.steps.some((step) => step.variants.length > 1)) {
+    importNames.add('DeviceTabs');
+    importNames.add('DeviceTab');
+  }
+
+  const frontmatter = serializeFrontmatter({
+    title: args.title,
+    tags: frontmatterTags([...new Set(args.runs.flatMap((run) => run.tags))]),
+    generatedAt: args.generatedAt,
+    projects: [...new Set(args.runs.map((run) => run.project))],
+  });
+
+  const stepBlocks = args.steps.map(renderStep).join('\n\n');
+
+  return `${frontmatter}import { ${[...importNames].join(', ')} } from '${args.config.componentImportPath}';\n\n<StepList>\n${stepBlocks}\n</StepList>\n`;
+}
+
+export const mdxReporter: ReportGenerator = {
+  name: 'mdx',
+  description: 'Generates one MDX help article per captured story.',
 
   validateConfig(config): boolean {
     return config != null && typeof config === 'object' && !Array.isArray(config);
@@ -392,36 +465,37 @@ export const markdownReporter: ReportGenerator = {
 
       const title = stripTags(storyTitle);
       const storySlug = slugify(title);
-      const markdownFile = path.join(context.outputDir, config.storiesDir ?? '.', `${storySlug}.md`);
+      const mdxFile = path.join(context.outputDir, config.storiesDir ?? '.', `${storySlug}.mdx`);
       const steps = await buildSteps({
-        run: primaryRun,
+        runs,
+        primaryRun,
         storySlug,
         outputDir: context.outputDir,
-        markdownFile,
+        mdxFile,
         config,
         writtenFiles,
       });
 
-      await fs.mkdir(path.dirname(markdownFile), { recursive: true });
+      await fs.mkdir(path.dirname(mdxFile), { recursive: true });
       await fs.writeFile(
-        markdownFile,
-        renderMarkdown({
+        mdxFile,
+        renderMdx({
           title,
           steps,
-          run: primaryRun,
+          runs,
           config,
           generatedAt,
         }),
         'utf8',
       );
 
-      writtenFiles.add(markdownFile);
+      writtenFiles.add(mdxFile);
       articleCount += 1;
     }
 
     return {
       files: [...writtenFiles],
-      summary: `Generated ${articleCount} Markdown article${articleCount === 1 ? '' : 's'}.`,
+      summary: `Generated ${articleCount} MDX article${articleCount === 1 ? '' : 's'}.`,
     };
   },
 };

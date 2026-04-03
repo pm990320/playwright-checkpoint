@@ -161,6 +161,11 @@ export type BoundingBox = {
 export type ScreenshotCollectorData = {
   fullPage: boolean;
   highlightBounds: BoundingBox | null;
+  highlightSelector?: string | null;
+  imageSize?: {
+    width: number;
+    height: number;
+  } | null;
 };
 
 export type HtmlCollectorData = {
