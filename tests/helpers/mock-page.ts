@@ -104,6 +104,7 @@ export function createCollectorContext(options?: {
   redact?: string[];
   config?: ResolvedCollectorConfig;
   checkpointOptions?: CheckpointOptions;
+  adjustTimeout?: (ms: number) => void;
 }) {
   const page = options?.page ?? new MockPage();
   const testInfo = options?.testInfo ?? createMockTestInfo();
@@ -117,5 +118,6 @@ export function createCollectorContext(options?: {
     redact: options?.redact ?? [],
     config: options?.config ?? {},
     options: options?.checkpointOptions ?? {},
+    adjustTimeout: options?.adjustTimeout,
   };
 }

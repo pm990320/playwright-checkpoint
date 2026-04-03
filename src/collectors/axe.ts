@@ -83,8 +83,12 @@ export const axeCollector: CheckpointCollector = {
   async collect(ctx) {
     const timeoutBudgetMs = typeof ctx.config.timeoutMs === 'number' ? ctx.config.timeoutMs : 5_000;
 
-    if (timeoutBudgetMs > 0 && typeof ctx.testInfo.setTimeout === 'function') {
-      ctx.testInfo.setTimeout(ctx.testInfo.timeout + timeoutBudgetMs);
+    if (timeoutBudgetMs > 0) {
+      if (typeof ctx.adjustTimeout === 'function') {
+        ctx.adjustTimeout(timeoutBudgetMs);
+      } else if (ctx.testInfo && typeof ctx.testInfo.setTimeout === 'function') {
+        ctx.testInfo.setTimeout(ctx.testInfo.timeout + timeoutBudgetMs);
+      }
     }
 
     let module: AxeModule;
