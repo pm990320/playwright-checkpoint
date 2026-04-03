@@ -80,3 +80,28 @@ jobs:
             throw new Error(`Tarball too large: ${pack.size} bytes (limit 750000 bytes).`);
           }
           NODE
+
+  example-smoke:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+      - name: Build package
+        run: bun run build
+      - name: Install example dependencies
+        working-directory: examples/basic
+        run: npm install --no-package-lock
+      - name: Install Playwright Chromium
+        working-directory: examples/basic
+        run: npx playwright install --with-deps chromium
+      - name: Run example smoke test
+        working-directory: examples/basic
+        run: npx playwright test

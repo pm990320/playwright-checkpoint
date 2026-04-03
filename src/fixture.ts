@@ -199,7 +199,7 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
 
   const test = base.extend<CheckpointFixtures>({
     checkpointManifest: [
-      async (_fixtures, use, testInfo) => {
+      async ({}, use, testInfo) => {
         const manifest = createCheckpointManifestRecord(testInfo);
 
         try {
@@ -215,7 +215,7 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
       { auto: true },
     ],
 
-    testCheckpointConfig: async (_fixtures, use) => {
+    testCheckpointConfig: async ({}, use) => {
       let current: TestCheckpointConfig | null = null;
 
       const controller: TestCheckpointConfigController = {
@@ -235,7 +235,7 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
       await use(controller);
     },
 
-    deviceProfile: async (_fixtures, use, testInfo) => {
+    deviceProfile: async ({}, use, testInfo) => {
       await use(createDeviceProfile(testInfo));
     },
 
