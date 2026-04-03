@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.3](https://github.com/pm990320/playwright-checkpoint/compare/v0.2.2...v0.2.3) (2026-04-03)
+
+
+### Bug Fixes
+
+* add bun setup to publish job ([db25b01](https://github.com/pm990320/playwright-checkpoint/commit/db25b013440359088c5178da96223c3347173518))
+* add bun setup to publish job ([7b52440](https://github.com/pm990320/playwright-checkpoint/commit/7b5244082599aacf76b5ff4d9b8086f4ddb96191))
+
 ## [0.2.2](https://github.com/pm990320/playwright-checkpoint/compare/v0.2.1...v0.2.2) (2026-04-03)
 
 
