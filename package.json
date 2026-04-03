@@ -13,11 +13,11 @@
   ],
   "license": "MIT",
   "author": "pm990320",
-  "repository": "gecckio/playwright-checkpoint",
+  "repository": "pm990320/playwright-checkpoint",
   "bugs": {
-    "url": "https://github.com/gecckio/playwright-checkpoint/issues"
+    "url": "https://github.com/pm990320/playwright-checkpoint/issues"
   },
-  "homepage": "https://github.com/gecckio/playwright-checkpoint",
+  "homepage": "https://github.com/pm990320/playwright-checkpoint",
   "private": false,
   "type": "module",
   "packageManager": "bun@1.2.15",
