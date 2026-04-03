@@ -394,6 +394,8 @@ export async function captureCheckpointRecord(args: {
     url: args.page.url(),
     title: await collectPageTitle(args.page),
     timestamp: new Date().toISOString(),
+    ...(options.description ? { description: options.description } : {}),
+    ...(typeof options.step === 'number' ? { step: options.step } : {}),
     collectors: collectorResults,
   };
 

@@ -182,6 +182,7 @@ describe('checkpoint capture pipeline', () => {
       name: 'Checkout / Final Review',
       options: {
         description: 'Per-checkpoint description',
+        step: 2,
         collectors: {
           'custom-enabled': { retries: 3, source: 'checkpoint' },
         },
@@ -202,6 +203,7 @@ describe('checkpoint capture pipeline', () => {
       },
       options: {
         description: 'Per-checkpoint description',
+        step: 2,
         collectors: {
           'custom-enabled': {
             retries: 3,
@@ -219,6 +221,8 @@ describe('checkpoint capture pipeline', () => {
       slug: 'checkout-final-review',
       url: 'https://example.com/checkout',
       title: 'Checkout',
+      description: 'Per-checkpoint description',
+      step: 2,
       collectors: {
         'custom-enabled': {
           data: { ran: true },

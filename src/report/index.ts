@@ -9,10 +9,12 @@ import type {
   RunRecord,
 } from '../types';
 import { htmlReporter } from './html-reporter';
+import { markdownReporter } from './markdown-reporter';
 
 const builtinReporters = new Map<string, ReportGenerator>();
 const builtinReporterDefaults: Partial<Record<string, ReporterConfig>> = {
   html: true,
+  markdown: false,
 };
 
 async function walkFiles(directory: string): Promise<string[]> {
@@ -213,6 +215,7 @@ export async function runReporters(
 }
 
 registerBuiltinReporter(htmlReporter);
+registerBuiltinReporter(markdownReporter);
 
-export { htmlReporter };
+export { htmlReporter, markdownReporter };
 export type { ReportGenerator } from '../types';
