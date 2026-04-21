@@ -32,6 +32,7 @@ export type CheckpointSessionMetadata = Partial<
 export type CheckpointSessionOptions = Omit<CheckpointConfig, 'collectors'> & {
   outputDir: string;
   collectors?: Partial<Record<string, boolean | CollectorConfig>>;
+  testConfig?: TestCheckpointConfig | null | (() => TestCheckpointConfig | null);
   sessionMetadata?: CheckpointSessionMetadata;
   manifest?: CheckpointManifest;
   manifestPath?: string;
@@ -136,6 +137,16 @@ function createManifest(sessionMetadata: CheckpointSessionMetadata | undefined):
     startedAt: new Date().toISOString(),
     checkpoints: [],
   };
+}
+
+function resolveTestConfig(
+  testConfig: CheckpointSessionOptions['testConfig'],
+): TestCheckpointConfig | null {
+  if (typeof testConfig === 'function') {
+    return testConfig();
+  }
+
+  return testConfig ?? null;
 }
 
 async function writeManifestFile(manifestPath: string, manifest: CheckpointManifest): Promise<string> {
@@ -409,7 +420,7 @@ export async function createCheckpointSession(page: Page, options: CheckpointSes
   }
 
   await fs.mkdir(outputDir, { recursive: true });
-  await ensureCollectorsSetup(resolveCollectors(sessionConfig));
+  await ensureCollectorsSetup(resolveCollectors(sessionConfig, resolveTestConfig(options.testConfig)));
 
   return {
     outputDir,
@@ -419,7 +430,7 @@ export async function createCheckpointSession(page: Page, options: CheckpointSes
         throw new Error('Checkpoint session has already been finalized.');
       }
 
-      const resolvedCollectors = resolveCollectors(sessionConfig, null, checkpointOptions);
+      const resolvedCollectors = resolveCollectors(sessionConfig, resolveTestConfig(options.testConfig), checkpointOptions);
       await ensureCollectorsSetup(resolvedCollectors);
 
       return runCollectorPipeline({

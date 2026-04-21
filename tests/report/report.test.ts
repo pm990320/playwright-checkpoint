@@ -410,6 +410,432 @@ describe('report utilities', () => {
     expect(article).toContain('Need more help? Contact support.');
   });
 
+  it('uses article title overrides without changing story grouping', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(path.join(testResultsDir, 'a'), {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-title-a',
+      title: 'Internal title A @docs',
+      article: {
+        title: 'Shared help article title',
+      },
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Step A',
+          slug: 'step-a',
+          url: 'https://example.com/a',
+          title: 'Page A',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'title-a'),
+        },
+      ],
+    });
+
+    await writeManifestFile(path.join(testResultsDir, 'b'), {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-title-b',
+      title: 'Internal title B @docs',
+      article: {
+        title: 'Shared help article title',
+      },
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:01:00.000Z',
+      checkpoints: [
+        {
+          name: 'Step B',
+          slug: 'step-b',
+          url: 'https://example.com/b',
+          title: 'Page B',
+          timestamp: '2026-04-03T00:01:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'title-b'),
+        },
+      ],
+    });
+
+    await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            frontmatter: true,
+          },
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const articleA = await fs.readFile(path.join(outputDir, 'internal-title-a.md'), 'utf8');
+    const articleB = await fs.readFile(path.join(outputDir, 'internal-title-b.md'), 'utf8');
+
+    expect(articleA).toContain('title: "Shared help article title"');
+    expect(articleA).toContain('# Shared help article title');
+    expect(articleB).toContain('title: "Shared help article title"');
+    expect(articleB).toContain('# Shared help article title');
+  });
+
+  it('renders article descriptions between the heading and first step', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-article-description',
+      title: 'CSV import @docs',
+      article: {
+        description: 'Prepare the CSV, map your columns, and review duplicates before importing.',
+      },
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Upload CSV',
+          slug: 'upload-csv',
+          url: 'https://example.com/import',
+          title: 'Import',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'article-description'),
+        },
+      ],
+    });
+
+    await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: true,
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const article = await fs.readFile(path.join(outputDir, 'csv-import.md'), 'utf8');
+
+    expect(article).toContain('# CSV import');
+    expect(article).toContain('Prepare the CSV, map your columns, and review duplicates before importing.');
+    expect(article.indexOf('# CSV import')).toBeLessThan(
+      article.indexOf('Prepare the CSV, map your columns, and review duplicates before importing.'),
+    );
+    expect(article.indexOf('Prepare the CSV, map your columns, and review duplicates before importing.')).toBeLessThan(
+      article.indexOf('## Step 1: Upload CSV'),
+    );
+  });
+
+  it('uses article slug overrides for the markdown filename and screenshot directory', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-article-slug',
+      title: 'Internal CSV import story @docs',
+      article: {
+        slug: 'import-leads-from-csv',
+      },
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Upload CSV',
+          slug: 'upload-csv',
+          url: 'https://example.com/import',
+          title: 'Import',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'article-slug'),
+        },
+      ],
+    });
+
+    const results = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: true,
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const articlePath = path.join(outputDir, 'import-leads-from-csv.md');
+    const screenshotPath = path.join(outputDir, 'screenshots', 'import-leads-from-csv', '01-upload-csv.png');
+    const article = await fs.readFile(articlePath, 'utf8');
+
+    expect(results.markdown?.files).toEqual(expect.arrayContaining([articlePath, screenshotPath]));
+    expect(article).toContain('![Import](./screenshots/import-leads-from-csv/01-upload-csv.png)');
+  });
+
+  it('supports requireExplicitStep and skips step-less stories when enabled', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDirDefault = await makeTempDir('playwright-checkpoint-markdown-default-');
+    const outputDirExplicit = await makeTempDir('playwright-checkpoint-markdown-explicit-');
+    const outputDirSkipped = await makeTempDir('playwright-checkpoint-markdown-skipped-');
+
+    await writeManifestFile(path.join(testResultsDir, 'mixed'), {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-require-explicit-step',
+      title: 'Generate help article @docs',
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Debug snapshot',
+          slug: 'debug-snapshot',
+          url: 'https://example.com/help',
+          title: 'Debug',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          description: 'Internal-only state snapshot.',
+          collectors: await writeCollectorArtifacts(testResultsDir, 'require-explicit-debug'),
+        },
+        {
+          name: 'Open help form',
+          slug: 'open-help-form',
+          url: 'https://example.com/help',
+          title: 'Help form',
+          timestamp: '2026-04-03T00:00:02.000Z',
+          description: 'Open the form that starts the help flow.',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'require-explicit-step'),
+        },
+      ],
+    });
+
+    const defaultResults = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: true,
+        },
+      },
+      testResultsDir,
+      outputDirDefault,
+    );
+
+    const explicitResults = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            requireExplicitStep: true,
+          },
+        },
+      },
+      testResultsDir,
+      outputDirExplicit,
+    );
+
+    await writeManifestFile(path.join(testResultsDir, 'step-less'), {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-step-less-story',
+      title: 'Internal debug story @docs',
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:01:00.000Z',
+      checkpoints: [
+        {
+          name: 'Debug snapshot only',
+          slug: 'debug-snapshot-only',
+          url: 'https://example.com/debug',
+          title: 'Debug only',
+          timestamp: '2026-04-03T00:01:01.000Z',
+          description: 'This checkpoint should stay out of the article.',
+          collectors: await writeCollectorArtifacts(testResultsDir, 'require-explicit-step-less'),
+        },
+      ],
+    });
+
+    const skippedResults = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            requireExplicitStep: true,
+          },
+        },
+      },
+      testResultsDir,
+      outputDirSkipped,
+    );
+
+    const defaultArticle = await fs.readFile(path.join(outputDirDefault, 'generate-help-article.md'), 'utf8');
+    const explicitArticle = await fs.readFile(path.join(outputDirExplicit, 'generate-help-article.md'), 'utf8');
+
+    expect(defaultResults.markdown?.summary).toBe('Generated 1 Markdown article.');
+    expect(defaultArticle).toContain('## Step 1: Open help form');
+    expect(defaultArticle).toContain('## Step 2: Debug snapshot');
+
+    expect(explicitResults.markdown?.summary).toBe('Generated 1 Markdown article.');
+    expect(explicitArticle).toContain('## Step 1: Open help form');
+    expect(explicitArticle).not.toContain('Debug snapshot');
+
+    expect(skippedResults.markdown?.summary).toBe('Generated 1 Markdown article.');
+    await expect(fs.stat(path.join(outputDirSkipped, 'internal-debug-story.md'))).rejects.toThrow();
+    expect(await fs.readFile(path.join(outputDirSkipped, 'generate-help-article.md'), 'utf8')).toContain('## Step 1: Open help form');
+  });
+
+  it('supports combined article metadata overrides and resolves slug collisions', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(path.join(testResultsDir, 'a'), {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-combined-a',
+      title: 'CSV import primary @docs',
+      article: {
+        title: 'How to import leads from CSV',
+        description: 'Upload the file, map each column, and confirm the import preview.',
+        slug: 'import-leads-from-csv',
+      },
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Upload CSV',
+          slug: 'upload-csv',
+          url: 'https://example.com/import',
+          title: 'Import',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'combined-a'),
+        },
+      ],
+    });
+
+    await writeManifestFile(path.join(testResultsDir, 'b'), {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-combined-b',
+      title: 'CSV import secondary @docs',
+      article: {
+        title: 'How to import leads from CSV',
+        description: 'Review the mapped fields before saving the article draft.',
+        slug: 'import-leads-from-csv',
+      },
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:01:00.000Z',
+      checkpoints: [
+        {
+          name: 'Review mapping',
+          slug: 'review-mapping',
+          url: 'https://example.com/import/review',
+          title: 'Review',
+          timestamp: '2026-04-03T00:01:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'combined-b'),
+        },
+      ],
+    });
+
+    await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            frontmatter: true,
+          },
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const primary = await fs.readFile(path.join(outputDir, 'import-leads-from-csv.md'), 'utf8');
+    const secondary = await fs.readFile(path.join(outputDir, 'import-leads-from-csv-2.md'), 'utf8');
+
+    expect(primary).toContain('title: "How to import leads from CSV"');
+    expect(primary).toContain('# How to import leads from CSV');
+    expect(primary).toContain('Upload the file, map each column, and confirm the import preview.');
+    expect(secondary).toContain('# How to import leads from CSV');
+    expect(secondary).toContain('Review the mapped fields before saving the article draft.');
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[playwright-checkpoint] Markdown article slug collision for "CSV import secondary @docs" resolved as "import-leads-from-csv-2".',
+    );
+  });
+
+  it('merges per-test article frontmatter over global fields while preserving generated metadata', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-frontmatter',
+      title: 'CSV import story @docs',
+      article: {
+        title: 'How to import leads from CSV',
+        frontmatter: {
+          collection: 'Software Guides',
+          category: 'Importing',
+          author: 'engineering',
+          testId: 'should-not-win',
+          startedAt: 'should-not-win',
+          generatedAt: 'should-not-win',
+        },
+      },
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Upload CSV',
+          slug: 'upload-csv',
+          url: 'https://example.com/import',
+          title: 'Import',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'article-frontmatter'),
+        },
+      ],
+    });
+
+    await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            frontmatter: {
+              collection: 'Global Collection',
+              category: 'Global Category',
+              canonical_url: 'https://docs.example.com/import',
+              author: 'docs-team',
+            },
+          },
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const article = await fs.readFile(path.join(outputDir, 'csv-import-story.md'), 'utf8');
+
+    expect(article).toContain('title: "How to import leads from CSV"');
+    expect(article).toContain('collection: "Software Guides"');
+    expect(article).toContain('category: "Importing"');
+    expect(article).toContain('canonical_url: "https://docs.example.com/import"');
+    expect(article).toContain('author: "engineering"');
+    expect(article).toContain('testId: "t-frontmatter"');
+    expect(article).toContain('startedAt: "2026-04-03T00:00:00.000Z"');
+    expect(article).toMatch(/generatedAt: "20\d{2}-\d{2}-\d{2}T/);
+    expect(article).not.toContain('testId: "should-not-win"');
+    expect(article).not.toContain('startedAt: "should-not-win"');
+    expect(article).not.toContain('generatedAt: "should-not-win"');
+  });
+
   it('supports generating MDX articles with device variants', async () => {
     const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
     const outputDir = await makeTempDir('playwright-checkpoint-mdx-');

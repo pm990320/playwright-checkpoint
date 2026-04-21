@@ -126,6 +126,11 @@ const { test } = createCheckpoint();
 test('checkout on mobile', async ({ page, checkpoint, testCheckpointConfig }) => {
   testCheckpointConfig.set({
     description: 'Mobile checkout happy path.',
+    article: {
+      title: 'How to complete checkout on mobile',
+      description: 'Capture customer-facing copy for the generated help article.',
+      slug: 'mobile-checkout-guide',
+    },
     collectors: {
       'web-vitals': true,
       axe: { timeoutMs: 15_000 },
@@ -331,6 +336,7 @@ Supported markdown reporter config:
       frontmatter: true,
       imagePathPrefix: '/static/help',
       copyScreenshots: true,
+      requireExplicitStep: true,
     },
   },
 }
@@ -344,6 +350,8 @@ Behavior:
 - Uses `description` when present
 - Falls back to an auto-generated sentence from page title + URL
 - Includes URL and breadcrumb text for each step
+- Uses `testCheckpointConfig.set({ article })` metadata to override the article title, intro paragraph, and filename slug
+- Set `requireExplicitStep: true` to exclude checkpoints without a numeric `step`
 - Only includes stories that either:
   - have at least one checkpoint with `description` or `step`, or
   - match `includeTags`
@@ -416,6 +424,23 @@ await runReporters(
 
 Markdown articles work best when your checkpoints are annotated.
 
+You can also override customer-facing article metadata separately from the Playwright test title:
+
+```ts
+testCheckpointConfig.set({
+  article: {
+    title: 'How to import leads from a CSV into your campaign',
+    description: 'Learn how to upload your CSV, map each column, and review duplicates before publishing.',
+    slug: 'import-leads-from-csv',
+    frontmatter: {
+      collection: 'Software Guides',
+      gleap_doc_id: 179,
+      author: 'engineering',
+    },
+  },
+});
+```
+
 ```ts
 await checkpoint('Navigate to the login page', {
   step: 1,
@@ -456,6 +481,8 @@ Example output shape:
 
 ```md
 # Sign in to your account
+
+Learn how to upload your CSV, map each column, and review duplicates before publishing.
 
 ## Step 1: Navigate to the login page
 

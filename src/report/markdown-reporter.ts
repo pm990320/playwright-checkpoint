@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { CheckpointRecord, ReportGenerator, RunRecord, ScreenshotCollectorData } from '../types';
+import { warn } from '../core';
 import { groupByStory } from './story-utils';
 
 type MarkdownReporterConfig = {
@@ -13,6 +14,7 @@ type MarkdownReporterConfig = {
   frontmatter?: boolean | Record<string, unknown>;
   imagePathPrefix?: string;
   copyScreenshots?: boolean;
+  requireExplicitStep?: boolean;
 };
 
 type MarkdownStep = {
@@ -41,6 +43,21 @@ function stripTags(value: string): string {
   return stripped || value.trim() || 'Untitled story';
 }
 
+function articleTitle(run: RunRecord): string {
+  const override = run.article?.title?.trim();
+  return override || stripTags(run.title);
+}
+
+function articleDescription(run: RunRecord): string | null {
+  const description = run.article?.description?.trim();
+  return description ? description : null;
+}
+
+function articleSlug(run: RunRecord): string {
+  const override = run.article?.slug?.trim();
+  return slugify(override || stripTags(run.title));
+}
+
 function normalizeConfig(config: Record<string, unknown>): MarkdownReporterConfig {
   return {
     storiesDir: typeof config.storiesDir === 'string' ? config.storiesDir : '.',
@@ -59,6 +76,7 @@ function normalizeConfig(config: Record<string, unknown>): MarkdownReporterConfi
         : false,
     imagePathPrefix: typeof config.imagePathPrefix === 'string' ? config.imagePathPrefix : undefined,
     copyScreenshots: typeof config.copyScreenshots === 'boolean' ? config.copyScreenshots : true,
+    requireExplicitStep: typeof config.requireExplicitStep === 'boolean' ? config.requireExplicitStep : false,
   };
 }
 
@@ -283,7 +301,9 @@ async function buildSteps(args: {
   config: MarkdownReporterConfig;
   writtenFiles: Set<string>;
 }): Promise<MarkdownStep[]> {
-  const checkpoints = orderedCheckpoints(args.run.checkpoints);
+  const checkpoints = orderedCheckpoints(args.run.checkpoints).filter(
+    (checkpoint) => !args.config.requireExplicitStep || typeof checkpoint.step === 'number',
+  );
   const steps: MarkdownStep[] = [];
 
   for (const [index, checkpoint] of checkpoints.entries()) {
@@ -317,6 +337,7 @@ async function buildSteps(args: {
 
 function renderMarkdown(args: {
   title: string;
+  description?: string | null;
   steps: MarkdownStep[];
   run: RunRecord;
   config: MarkdownReporterConfig;
@@ -325,13 +346,14 @@ function renderMarkdown(args: {
   const frontmatterFields =
     args.config.frontmatter === true || typeof args.config.frontmatter === 'object'
       ? {
-          title: args.title,
           project: args.run.project,
-          testId: args.run.testId,
           tags: args.run.tags,
+          ...(args.config.frontmatter && typeof args.config.frontmatter === 'object' ? args.config.frontmatter : {}),
+          ...(args.run.article?.frontmatter ?? {}),
+          testId: args.run.testId,
           startedAt: args.run.startedAt,
           generatedAt: args.generatedAt,
-          ...(args.config.frontmatter && typeof args.config.frontmatter === 'object' ? args.config.frontmatter : {}),
+          title: args.title,
         }
       : null;
 
@@ -361,6 +383,7 @@ function renderMarkdown(args: {
   const parts = [
     frontmatterFields ? serializeFrontmatter(frontmatterFields) : '',
     `# ${args.title}`,
+    args.description?.trim() ?? '',
     args.config.header ? args.config.header.trim() : '',
     sections,
     args.config.footer ? args.config.footer.trim() : '',
@@ -382,6 +405,7 @@ export const markdownReporter: ReportGenerator = {
     const stories = groupByStory(context.runs);
     const generatedAt = new Date().toISOString();
     const writtenFiles = new Set<string>();
+    const usedStorySlugs = new Set<string>();
     let articleCount = 0;
 
     for (const [storyTitle, runs] of stories) {
@@ -390,8 +414,18 @@ export const markdownReporter: ReportGenerator = {
         continue;
       }
 
-      const title = stripTags(storyTitle);
-      const storySlug = slugify(title);
+      const title = articleTitle(primaryRun);
+      const baseStorySlug = articleSlug(primaryRun);
+      let storySlug = baseStorySlug;
+      if (usedStorySlugs.has(storySlug)) {
+        let index = 2;
+        while (usedStorySlugs.has(`${baseStorySlug}-${index}`)) {
+          index += 1;
+        }
+        storySlug = `${baseStorySlug}-${index}`;
+        warn(`Markdown article slug collision for "${storyTitle}" resolved as "${storySlug}".`);
+      }
+      usedStorySlugs.add(storySlug);
       const markdownFile = path.join(context.outputDir, config.storiesDir ?? '.', `${storySlug}.md`);
       const steps = await buildSteps({
         run: primaryRun,
@@ -401,12 +435,16 @@ export const markdownReporter: ReportGenerator = {
         config,
         writtenFiles,
       });
+      if (steps.length === 0) {
+        continue;
+      }
 
       await fs.mkdir(path.dirname(markdownFile), { recursive: true });
       await fs.writeFile(
         markdownFile,
         renderMarkdown({
           title,
+          description: articleDescription(primaryRun),
           steps,
           run: primaryRun,
           config,
