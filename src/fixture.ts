@@ -21,6 +21,7 @@ import {
 } from './core';
 import { createDeviceProfile, type DeviceProfile } from './device-profile';
 import type {
+  ArticleDefinition,
   ArticleMetadata,
   CheckpointConfig,
   CheckpointManifest,
@@ -89,10 +90,12 @@ function mergeCollectorOverrides(
 function mergeTestConfig(current: TestCheckpointConfig | null, update: TestCheckpointConfig): TestCheckpointConfig {
   const collectors = mergeCollectorOverrides(current?.collectors, update.collectors);
   const article = mergeArticleMetadata(current?.article, update.article);
+  const articles = update.articles ? cloneArticleDefinitions(update.articles) : current?.articles ? cloneArticleDefinitions(current.articles) : undefined;
 
   return {
     description: update.description ?? current?.description,
     ...(article ? { article } : {}),
+    ...(articles ? { articles } : {}),
     ...(collectors ? { collectors } : {}),
   };
 }
@@ -127,9 +130,24 @@ function cloneArticleMetadata(article: ArticleMetadata): ArticleMetadata {
   };
 }
 
+function cloneArticleDefinition(article: ArticleDefinition): ArticleDefinition {
+  return {
+    ...cloneArticleMetadata(article),
+    steps: [...article.steps],
+  };
+}
+
+function cloneArticleDefinitions(articles: ArticleDefinition[]): ArticleDefinition[] {
+  return articles.map((article) => cloneArticleDefinition(article));
+}
+
 function syncManifestArticle(manifest: CheckpointManifest, testConfig: TestCheckpointConfig | null): void {
   if (testConfig?.article) {
     manifest.article = cloneArticleMetadata(testConfig.article);
+  }
+
+  if (testConfig?.articles) {
+    manifest.articles = cloneArticleDefinitions(testConfig.articles);
   }
 }
 

@@ -441,6 +441,27 @@ testCheckpointConfig.set({
 });
 ```
 
+For larger journeys, you can emit multiple help articles from a single test run and reuse shared checkpoints:
+
+```ts
+testCheckpointConfig.set({
+  articles: [
+    {
+      slug: 'edit-cta',
+      title: 'How to edit the CTA button',
+      description: 'Change the call-to-action text and link on your video.',
+      steps: ['editor-open', 'components-tab', 'cta-saved'],
+    },
+    {
+      slug: 'add-outro',
+      title: 'How to add an outro video',
+      description: 'Attach a closing clip after the main video.',
+      steps: ['editor-open', 'components-tab', 'outro-saved'],
+    },
+  ],
+});
+```
+
 ```ts
 await checkpoint('Navigate to the login page', {
   step: 1,
@@ -494,6 +515,15 @@ Learn how to upload your CSV, map each column, and review duplicates before publ
 
 Open the login page and confirm the email/password fields are visible.
 ```
+
+### Multi-article journeys
+
+Use `testCheckpointConfig.set({ articles: [...] })` when one Playwright test should produce multiple markdown guides that share the same captured intro steps.
+
+- `steps` is an ordered list of checkpoint names to include in that article
+- shared checkpoints are copied once and referenced by multiple generated articles
+- missing checkpoint names only warn; generation continues
+- if `articles` is empty, the reporter falls back to the default single-article behavior
 
 ---
 

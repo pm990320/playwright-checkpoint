@@ -138,6 +138,33 @@ describe('TestCheckpointConfig typing', () => {
       author: 'engineering',
     });
   });
+
+  it('accepts multi-article definitions', () => {
+    const config = {
+      articles: [
+        {
+          title: 'How to edit the CTA button',
+          slug: 'edit-cta',
+          description: 'Change the call-to-action text and link.',
+          steps: ['editor-open', 'components-tab', 'cta-saved'],
+        },
+        {
+          title: 'How to add an outro',
+          slug: 'add-outro',
+          steps: ['editor-open', 'components-tab', 'outro-saved'],
+          frontmatter: {
+            collection: 'Video editor',
+          },
+        },
+      ],
+    } satisfies TestCheckpointConfig;
+
+    expect(config.articles).toHaveLength(2);
+    expect(config.articles?.[0]?.steps).toEqual(['editor-open', 'components-tab', 'cta-saved']);
+    expect(config.articles?.[1]?.frontmatter).toEqual({
+      collection: 'Video editor',
+    });
+  });
 });
 
 describe('checkpoint capture pipeline', () => {

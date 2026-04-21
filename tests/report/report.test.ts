@@ -764,7 +764,7 @@ describe('report utilities', () => {
     expect(secondary).toContain('# How to import leads from CSV');
     expect(secondary).toContain('Review the mapped fields before saving the article draft.');
     expect(warnSpy).toHaveBeenCalledWith(
-      '[playwright-checkpoint] Markdown article slug collision for "CSV import secondary @docs" resolved as "import-leads-from-csv-2".',
+      '[playwright-checkpoint] Markdown article slug collision for "How to import leads from CSV" resolved as "import-leads-from-csv-2".',
     );
   });
 
@@ -834,6 +834,240 @@ describe('report utilities', () => {
     expect(article).not.toContain('testId: "should-not-win"');
     expect(article).not.toContain('startedAt: "should-not-win"');
     expect(article).not.toContain('generatedAt: "should-not-win"');
+  });
+
+  it('supports multi-article journeys with shared checkpoint screenshots', async () => {
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-multi-article',
+      title: 'Video editor flow @docs',
+      articles: [
+        {
+          title: 'How to edit the CTA button',
+          slug: 'edit-cta',
+          description: 'Update the CTA text and save the changes.',
+          steps: ['editor-open', 'components-tab', 'cta-saved'],
+        },
+        {
+          title: 'How to add an outro',
+          slug: 'add-outro',
+          description: 'Attach an outro clip to the end of the journey.',
+          steps: ['editor-open', 'components-tab', 'outro-saved'],
+        },
+      ],
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'editor-open',
+          slug: 'editor-open',
+          url: 'https://example.com/editor',
+          title: 'Editor open',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          step: 9,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'multi-article-editor-open'),
+        },
+        {
+          name: 'components-tab',
+          slug: 'components-tab',
+          url: 'https://example.com/editor/components',
+          title: 'Components tab',
+          timestamp: '2026-04-03T00:00:02.000Z',
+          step: 8,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'multi-article-components-tab'),
+        },
+        {
+          name: 'cta-saved',
+          slug: 'cta-saved',
+          url: 'https://example.com/editor/cta',
+          title: 'CTA saved',
+          timestamp: '2026-04-03T00:00:03.000Z',
+          step: 7,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'multi-article-cta-saved'),
+        },
+        {
+          name: 'outro-saved',
+          slug: 'outro-saved',
+          url: 'https://example.com/editor/outro',
+          title: 'Outro saved',
+          timestamp: '2026-04-03T00:00:04.000Z',
+          step: 6,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'multi-article-outro-saved'),
+        },
+        {
+          name: 'unused-debug',
+          slug: 'unused-debug',
+          url: 'https://example.com/editor/debug',
+          title: 'Unused debug',
+          timestamp: '2026-04-03T00:00:05.000Z',
+          collectors: await writeCollectorArtifacts(testResultsDir, 'multi-article-unused-debug'),
+        },
+      ],
+    });
+
+    const results = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: {
+            frontmatter: true,
+          },
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const ctaArticle = await fs.readFile(path.join(outputDir, 'edit-cta.md'), 'utf8');
+    const outroArticle = await fs.readFile(path.join(outputDir, 'add-outro.md'), 'utf8');
+    const copiedScreenshots = (await fs.readdir(path.join(outputDir, 'screenshots', 'video-editor-flow'))).sort();
+
+    expect(results.markdown?.summary).toBe('Generated 2 Markdown articles.');
+    expect(ctaArticle).toContain('# How to edit the CTA button');
+    expect(ctaArticle).toContain('## Step 1: editor-open');
+    expect(ctaArticle).toContain('## Step 2: components-tab');
+    expect(ctaArticle).toContain('## Step 3: cta-saved');
+    expect(outroArticle).toContain('# How to add an outro');
+    expect(outroArticle).toContain('## Step 1: editor-open');
+    expect(outroArticle).toContain('## Step 2: components-tab');
+    expect(outroArticle).toContain('## Step 3: outro-saved');
+    expect(ctaArticle).toContain('![Editor open](./screenshots/video-editor-flow/editor-open.png)');
+    expect(outroArticle).toContain('![Editor open](./screenshots/video-editor-flow/editor-open.png)');
+    expect(copiedScreenshots).toEqual(['components-tab.png', 'cta-saved.png', 'editor-open.png', 'outro-saved.png']);
+  });
+
+  it('warns on missing steps, duplicate checkpoint names, and multi-article slug collisions', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-multi-article-warnings',
+      title: 'Video editor warnings @docs',
+      articles: [
+        {
+          title: 'Shared article',
+          slug: 'shared-guide',
+          steps: ['editor-open', 'components-tab', 'missing-step'],
+        },
+        {
+          title: 'Shared article',
+          slug: 'shared-guide',
+          steps: ['editor-open', 'cta-saved'],
+        },
+      ],
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'editor-open',
+          slug: 'editor-open',
+          url: 'https://example.com/editor',
+          title: 'Editor open',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          collectors: await writeCollectorArtifacts(testResultsDir, 'warning-editor-open'),
+        },
+        {
+          name: 'components-tab',
+          slug: 'components-tab',
+          url: 'https://example.com/editor/components',
+          title: 'Components tab old',
+          timestamp: '2026-04-03T00:00:02.000Z',
+          collectors: await writeCollectorArtifacts(testResultsDir, 'warning-components-old'),
+        },
+        {
+          name: 'components-tab',
+          slug: 'components-tab-2',
+          url: 'https://example.com/editor/components',
+          title: 'Components tab latest',
+          timestamp: '2026-04-03T00:00:03.000Z',
+          collectors: await writeCollectorArtifacts(testResultsDir, 'warning-components-latest'),
+        },
+        {
+          name: 'cta-saved',
+          slug: 'cta-saved',
+          url: 'https://example.com/editor/cta',
+          title: 'CTA saved',
+          timestamp: '2026-04-03T00:00:04.000Z',
+          collectors: await writeCollectorArtifacts(testResultsDir, 'warning-cta-saved'),
+        },
+      ],
+    });
+
+    await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: true,
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    const warnings = warnSpy.mock.calls.map((call) => String(call[0]));
+
+    expect(await fs.readFile(path.join(outputDir, 'shared-guide.md'), 'utf8')).toContain('Components tab latest');
+    expect(await fs.readFile(path.join(outputDir, 'shared-guide-1.md'), 'utf8')).toContain('# Shared article');
+    expect(warnings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Duplicate checkpoint name "components-tab"'),
+        expect.stringContaining('Markdown article step "missing-step" was not captured'),
+        expect.stringContaining('Markdown article slug collision for "Shared article" resolved as "shared-guide-1".'),
+      ]),
+    );
+  });
+
+  it('warns on empty multi-article config and falls back to default article generation', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const testResultsDir = await makeTempDir('playwright-checkpoint-report-');
+    const outputDir = await makeTempDir('playwright-checkpoint-markdown-');
+
+    await writeManifestFile(testResultsDir, {
+      environment: 'test',
+      project: 'desktop-light',
+      testId: 't-empty-multi-article',
+      title: 'Fallback article @docs',
+      articles: [],
+      tags: ['@docs'],
+      startedAt: '2026-04-03T00:00:00.000Z',
+      checkpoints: [
+        {
+          name: 'Open docs',
+          slug: 'open-docs',
+          url: 'https://example.com/docs',
+          title: 'Docs',
+          timestamp: '2026-04-03T00:00:01.000Z',
+          step: 1,
+          collectors: await writeCollectorArtifacts(testResultsDir, 'empty-multi-article'),
+        },
+      ],
+    });
+
+    const results = await runReporters(
+      {
+        reporters: {
+          html: false,
+          markdown: true,
+        },
+      },
+      testResultsDir,
+      outputDir,
+    );
+
+    expect(results.markdown?.summary).toBe('Generated 1 Markdown article.');
+    expect(await fs.readFile(path.join(outputDir, 'fallback-article.md'), 'utf8')).toContain('## Step 1: Open docs');
+    expect(warnSpy.mock.calls.map((call) => String(call[0]))).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('empty articles array'),
+      ]),
+    );
   });
 
   it('supports generating MDX articles with device variants', async () => {

@@ -36,6 +36,10 @@ export type ArticleMetadata = {
   frontmatter?: Record<string, unknown>;
 };
 
+export type ArticleDefinition = ArticleMetadata & {
+  steps: string[];
+};
+
 /**
  * Manifest produced per test run.
  */
@@ -45,6 +49,7 @@ export type CheckpointManifest = {
   testId: string;
   title: string;
   article?: ArticleMetadata;
+  articles?: ArticleDefinition[];
   tags: string[];
   startedAt: string;
   checkpoints: CheckpointRecord[];
@@ -80,6 +85,7 @@ export type TestCheckpointConfig = {
   collectors?: Partial<Record<string, boolean | CollectorOptions>>;
   description?: string;
   article?: ArticleMetadata;
+  articles?: ArticleDefinition[];
 };
 
 /**
@@ -424,6 +430,7 @@ export type RunRecord = {
   testId: string;
   title: string;
   article?: ArticleMetadata;
+  articles?: ArticleDefinition[];
   tags: string[];
   startedAt: string;
   checkpoints: CheckpointRecord[];
