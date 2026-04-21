@@ -68,10 +68,15 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Verify package tarball size
         run: |
-          npm pack --dry-run --json > pack.json
+          npm pack --dry-run --json > pack-output.txt 2>&1
           node <<'NODE'
           const fs = require('node:fs');
-          const [pack] = JSON.parse(fs.readFileSync('pack.json', 'utf8'));
+          const output = fs.readFileSync('pack-output.txt', 'utf8');
+          const match = output.match(/\[\s*\{[\s\S]*\]\s*$/);
+          if (!match) {
+            throw new Error('npm pack --dry-run did not emit a parseable JSON payload.');
+          }
+          const [pack] = JSON.parse(match[0]);
           if (!pack || typeof pack.size !== 'number') {
             throw new Error('npm pack --dry-run did not return a tarball size.');
           }
