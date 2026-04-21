@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/pm990320/playwright-checkpoint/compare/v0.3.0...v0.4.0) (2026-04-21)
+
+
+### Features
+
+* add example integration test harness ([62d3a1f](https://github.com/pm990320/playwright-checkpoint/commit/62d3a1f9b435468be39dd90027a69cebdc892de4))
+* extend markdown article metadata controls ([d470151](https://github.com/pm990320/playwright-checkpoint/commit/d4701514f9b46a893dc9ce724be0f6e46c6ea2ad))
+* extend markdown article metadata controls ([a259dd5](https://github.com/pm990320/playwright-checkpoint/commit/a259dd5a26de0b351f7616d4bcce16c6b7a69dc8))
+* support multi-article markdown guides ([1dff15d](https://github.com/pm990320/playwright-checkpoint/commit/1dff15d06bae9ceb3931566364eac1fb58becd97))
+
+
+### Bug Fixes
+
+* parse npm pack json in CI ([a225b4a](https://github.com/pm990320/playwright-checkpoint/commit/a225b4ac3b1494addb2a7403f5d046c01a5258a7))
+
 ## [Unreleased]
 
 ### Features

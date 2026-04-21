@@ -1,6 +1,6 @@
 {
   "name": "playwright-checkpoint",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Structured page snapshots for Playwright — screenshots, accessibility, web vitals, and auto-generated documentation from your e2e tests",
   "keywords": [
     "playwright",
