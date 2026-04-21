@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Features
+
+* add per-test markdown article metadata overrides for title, description, and slug
+* add markdown `requireExplicitStep` filtering for help-article generation
+* add per-test markdown frontmatter overrides for external CMS mapping
+* add multi-article markdown output with shared checkpoint references
+
 ## [0.3.0](https://github.com/pm990320/playwright-checkpoint/compare/v0.2.3...v0.3.0) (2026-04-03)
 
 

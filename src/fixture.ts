@@ -21,6 +21,8 @@ import {
 } from './core';
 import { createDeviceProfile, type DeviceProfile } from './device-profile';
 import type {
+  ArticleDefinition,
+  ArticleMetadata,
   CheckpointConfig,
   CheckpointManifest,
   CheckpointOptions,
@@ -87,11 +89,66 @@ function mergeCollectorOverrides(
 
 function mergeTestConfig(current: TestCheckpointConfig | null, update: TestCheckpointConfig): TestCheckpointConfig {
   const collectors = mergeCollectorOverrides(current?.collectors, update.collectors);
+  const article = mergeArticleMetadata(current?.article, update.article);
+  const articles = update.articles ? cloneArticleDefinitions(update.articles) : current?.articles ? cloneArticleDefinitions(current.articles) : undefined;
 
   return {
     description: update.description ?? current?.description,
+    ...(article ? { article } : {}),
+    ...(articles ? { articles } : {}),
     ...(collectors ? { collectors } : {}),
   };
+}
+
+function mergeArticleMetadata(
+  current: ArticleMetadata | undefined,
+  update: ArticleMetadata | undefined,
+): ArticleMetadata | undefined {
+  if (!current && !update) {
+    return undefined;
+  }
+
+  const merged: ArticleMetadata = {
+    ...(current ?? {}),
+    ...(update ?? {}),
+  };
+
+  if (current?.frontmatter || update?.frontmatter) {
+    merged.frontmatter = {
+      ...(current?.frontmatter ?? {}),
+      ...(update?.frontmatter ?? {}),
+    };
+  }
+
+  return merged;
+}
+
+function cloneArticleMetadata(article: ArticleMetadata): ArticleMetadata {
+  return {
+    ...article,
+    ...(article.frontmatter ? { frontmatter: { ...article.frontmatter } } : {}),
+  };
+}
+
+function cloneArticleDefinition(article: ArticleDefinition): ArticleDefinition {
+  return {
+    ...cloneArticleMetadata(article),
+    steps: [...article.steps],
+  };
+}
+
+function cloneArticleDefinitions(articles: ArticleDefinition[]): ArticleDefinition[] {
+  return articles.map((article) => cloneArticleDefinition(article));
+}
+
+function syncManifestArticle(manifest: CheckpointManifest, testConfig: TestCheckpointConfig | null): void {
+  if (testConfig?.article) {
+    manifest.article = cloneArticleMetadata(testConfig.article);
+  }
+
+  if (testConfig?.articles) {
+    manifest.articles = cloneArticleDefinitions(testConfig.articles);
+  }
 }
 
 function manifestEnvironment(): string {
@@ -250,7 +307,8 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
         outputDir: testInfo.outputPath('checkpoints'),
         manifestPath: testInfo.outputPath('checkpoint-manifest.json'),
         manifest: checkpointManifest,
-        collectors: mergeConfig(globalConfig, testCheckpointConfig.get()),
+        collectors: globalConfig.collectors,
+        testConfig: () => testCheckpointConfig.get(),
         custom: globalConfig.custom,
         redact: globalConfig.redact,
         testInfo,
@@ -258,8 +316,12 @@ export function createCheckpoint(globalConfig: CheckpointConfig = {}): {
       });
 
       try {
-        await use((name, options = {}) => session.checkpoint(name, options));
+        await use((name, options = {}) => {
+          syncManifestArticle(checkpointManifest, testCheckpointConfig.get());
+          return session.checkpoint(name, options);
+        });
       } finally {
+        syncManifestArticle(checkpointManifest, testCheckpointConfig.get());
         await session.finalize();
       }
     },

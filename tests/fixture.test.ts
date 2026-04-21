@@ -116,6 +116,57 @@ describe('resolveCollectors', () => {
   });
 });
 
+describe('TestCheckpointConfig typing', () => {
+  it('accepts article metadata overrides', () => {
+    const config = {
+      article: {
+        title: 'How to import leads from CSV',
+        description: 'Upload the file, map the columns, and confirm the preview.',
+        slug: 'import-leads-from-csv',
+        frontmatter: {
+          collection: 'Software Guides',
+          author: 'engineering',
+        },
+      },
+    } satisfies TestCheckpointConfig;
+
+    expect(config.article?.title).toBe('How to import leads from CSV');
+    expect(config.article?.description).toContain('map the columns');
+    expect(config.article?.slug).toBe('import-leads-from-csv');
+    expect(config.article?.frontmatter).toEqual({
+      collection: 'Software Guides',
+      author: 'engineering',
+    });
+  });
+
+  it('accepts multi-article definitions', () => {
+    const config = {
+      articles: [
+        {
+          title: 'How to edit the CTA button',
+          slug: 'edit-cta',
+          description: 'Change the call-to-action text and link.',
+          steps: ['editor-open', 'components-tab', 'cta-saved'],
+        },
+        {
+          title: 'How to add an outro',
+          slug: 'add-outro',
+          steps: ['editor-open', 'components-tab', 'outro-saved'],
+          frontmatter: {
+            collection: 'Video editor',
+          },
+        },
+      ],
+    } satisfies TestCheckpointConfig;
+
+    expect(config.articles).toHaveLength(2);
+    expect(config.articles?.[0]?.steps).toEqual(['editor-open', 'components-tab', 'cta-saved']);
+    expect(config.articles?.[1]?.frontmatter).toEqual({
+      collection: 'Video editor',
+    });
+  });
+});
+
 describe('checkpoint capture pipeline', () => {
   it('runs enabled collectors, skips disabled ones, and passes the expected custom collector context', async () => {
     const outputDir = await makeOutputDir();
